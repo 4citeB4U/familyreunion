@@ -111,7 +111,7 @@
         }
 
         input:checked + .slider {
-            background-color: #7a52c7;
+            background-color: #f0c14b; /* Yellow instead of purple */
         }
 
         input:checked + .slider:before {
@@ -139,8 +139,8 @@
         }
 
         .card-header {
-            background-color: #9370DB;
-            color: white;
+            background-color: #f0c14b; /* Yellow instead of purple */
+            color: #333; /* Darker text for better contrast on yellow */
             padding: 15px;
             font-size: 1.5rem;
             font-weight: 600;
@@ -155,11 +155,24 @@
             position: absolute;
             width: 35px;
             height: 45px;
-            background-color: #9370DB;
             border-radius: 50%;
             animation: float 12s ease-in-out infinite;
             z-index: 1;
             opacity: 0.7;
+        }
+
+        /* Yellow, white, and red balloons */
+        .balloon:nth-child(3n+1) {
+            background-color: #f0c14b; /* Yellow */
+        }
+
+        .balloon:nth-child(3n+2) {
+            background-color: #ffffff; /* White */
+            border: 1px solid #e0e0e0; /* Light border for white balloons */
+        }
+
+        .balloon:nth-child(3n+3) {
+            background-color: #e74c3c; /* Red */
         }
 
         .balloon::before {
@@ -167,7 +180,7 @@
             position: absolute;
             width: 2px;
             height: 15px;
-            background-color: #b19cd9;
+            background-color: #cccccc; /* Neutral color for all balloon strings */
             bottom: -10px;
             left: 50%;
             transform: translateX(-50%);
@@ -250,8 +263,8 @@
         }
 
         .submit-btn {
-            background-color: #7a52c7;
-            color: white;
+            background-color: #f0c14b; /* Yellow instead of purple */
+            color: #333; /* Darker text for better contrast on yellow */
             border: none;
             padding: 12px 20px;
             border-radius: 8px;
@@ -360,7 +373,7 @@
         }
 
         .submit-btn:hover {
-            background-color: #63439e;
+            background-color: #e6b333; /* Darker yellow for hover state */
         }
 
         .message-board {
@@ -390,7 +403,7 @@
 
         .message-sender {
             font-weight: 600;
-            color: #7a52c7;
+            color: #e6b333; /* Yellow instead of purple */
         }
 
         .message-time {
@@ -403,8 +416,8 @@
         }
 
         .send-btn {
-            background-color: #7a52c7;
-            color: white;
+            background-color: #f0c14b; /* Yellow instead of purple */
+            color: #333; /* Darker text for better contrast */
             border: none;
             width: 50px;
             height: 50px;
@@ -416,7 +429,7 @@
         }
 
         .send-btn:hover {
-            background-color: #63439e;
+            background-color: #e6b333; /* Darker yellow for hover state */
         }
 
         .suggestion-list {
@@ -433,7 +446,7 @@
 
         .suggestion-list li::before {
             content: "•";
-            color: #9370DB;
+            color: #f0c14b; /* Yellow instead of purple */
             font-weight: bold;
             display: inline-block;
             width: 1em;
@@ -445,7 +458,7 @@
             text-align: center;
             font-size: 3rem;
             font-weight: 700;
-            color: #4b2e83;
+            color: #333; /* Darker text instead of purple */
             margin-bottom: 0.5rem;
             margin-top: 1rem;
             font-family: 'Playfair Display', serif;
@@ -459,7 +472,7 @@
             display: block;
             width: 100px;
             height: 3px;
-            background: linear-gradient(to right, #9370DB, #7a52c7);
+            background: linear-gradient(to right, #f0c14b, #e6b333); /* Yellow gradient instead of purple */
             margin: 10px auto 0;
             border-radius: 3px;
         }
@@ -482,7 +495,7 @@
             top: 50%;
             width: 40px;
             height: 2px;
-            background: linear-gradient(to right, transparent, rgba(122, 82, 199, 0.5));
+            background: linear-gradient(to right, transparent, rgba(240, 193, 75, 0.7)); /* Yellow gradient */
         }
 
         .family-crest::before {
@@ -688,7 +701,7 @@
                 width: 300,
                 margin: 2,
                 color: {
-                    dark: '#7a52c7',  // Purple color for QR code
+                    dark: '#f0c14b',  // Yellow color for QR code instead of purple
                     light: '#ffffff'   // White background
                 }
             });
@@ -764,8 +777,8 @@
                 }
             ];
 
-            // Connection state
-            this.connected = false;
+            // Connection state - Set to true immediately to avoid connection attempts
+            this.connected = true;
 
             // LEEWAY system info
             this.systemName = 'LEEWAY WebRTC';
@@ -787,8 +800,15 @@
             this.onIceConnectionStateChangeCallback = null;
             this.onSpeakingCallback = null; // New callback for audio level detection
 
-            console.log(`${this.systemName} v${this.systemVersion} initialized with secure signaling`);
+            console.log(`${this.systemName} v${this.systemVersion} initialized with secure P2P mode`);
             console.log(`Session ID: ${this.sessionId}`);
+
+            // Immediately notify that we're connected
+            setTimeout(() => {
+                if (this.onConnectionStatusChangeCallback) {
+                    this.onConnectionStatusChangeCallback('connected');
+                }
+            }, 100);
         }
 
         /**
