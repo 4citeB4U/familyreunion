@@ -510,6 +510,9 @@
     <!-- Axios for HTTP requests -->
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 
+    <!-- WebSocket client for real-time communication -->
+    <script src="websocket-client.js"></script>
+
     <!-- 🧠 REGION: AI & MAIN APP CODE -->
     <script type="text/babel">
         // Local Storage Database System
@@ -1521,6 +1524,14 @@
             const [isCameraOff, setIsCameraOff] = React.useState(false);
             const [isRemoteConnected, setIsRemoteConnected] = React.useState(false);
             const [isPushToTalkActive, setIsPushToTalkActive] = React.useState(false);
+            const [isCallInProgress, setIsCallInProgress] = React.useState(false);
+            const [callStatus, setCallStatus] = React.useState(''); // 'dialing', 'ringing', 'connected', 'ended'
+
+            // WebSocket states
+            const [wsClient, setWsClient] = React.useState(null);
+            const [wsConnected, setWsConnected] = React.useState(false);
+            const [remoteStreams, setRemoteStreams] = React.useState({});
+            const [roomId, setRoomId] = React.useState(null);
 
             // Messaging states
             const [messageMode, setMessageMode] = React.useState('public');
@@ -2378,6 +2389,176 @@
 
 
 
+            // Handle call button click
+            const handleCallButtonClick = () => {
+                if (!selectedMember) {
+                    showNotification('Please select a family member to call', 'error');
+                    return;
+                }
+
+                // Set call status to dialing
+                setCallStatus('dialing');
+                setIsCallInProgress(true);
+
+                // Show notification
+                showNotification(`Calling ${selectedMember}...`, 'info');
+
+                // Check if we have a WebSocket connection
+                if (wsClient && wsConnected) {
+                    // Request camera and microphone access
+                    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+                        .then(stream => {
+                            setLocalStream(stream);
+
+                            // Set the stream to the local video element
+                            const videoElement = document.getElementById('local-video');
+                            if (videoElement) {
+                                videoElement.srcObject = stream;
+                            }
+
+                            // Create a room for the call
+                            wsClient.createRoom('private');
+
+                            // Set call status to ringing
+                            setCallStatus('ringing');
+                            showNotification(`${selectedMember}'s phone is ringing...`, 'info');
+
+                            // The WebSocket server will notify us when someone joins the room
+                            // and we'll handle that in the onUserJoined callback
+                        })
+                        .catch(error => {
+                            console.error('Error accessing camera or microphone:', error);
+                            showNotification('Error accessing camera or microphone. Using simulated mode.', 'error');
+
+                            // Fall back to simulated mode
+                            simulateCall();
+                        });
+                } else {
+                    // Fall back to simulated mode if WebSocket is not connected
+                    simulateCall();
+                }
+            };
+
+            // Simulate a call (fallback when WebSocket is not available)
+            const simulateCall = () => {
+                // Simulate call connection process
+                setTimeout(() => {
+                    setCallStatus('ringing');
+                    showNotification(`${selectedMember}'s phone is ringing...`, 'info');
+
+                    // Simulate answer after a delay
+                    setTimeout(() => {
+                        setCallStatus('connected');
+                        setIsRemoteConnected(true);
+                        showNotification(`${selectedMember} answered the call!`, 'success');
+
+                        // Create a simulated video stream for the remote user
+                        const remoteVideo = document.getElementById('remote-video');
+                        if (remoteVideo) {
+                            // Use the existing createSimulatedStream function
+                            const fakeStream = createSimulatedStream();
+                            remoteVideo.srcObject = fakeStream;
+                            remoteVideo.play().catch(e => console.error('Error playing remote video:', e));
+                        }
+                    }, 3000); // 3 seconds to answer
+                }, 2000); // 2 seconds to start ringing
+            };
+
+            // End call
+            const endCall = () => {
+                setCallStatus('ended');
+                setIsCallInProgress(false);
+                setIsRemoteConnected(false);
+
+                // Show notification
+                showNotification('Call ended', 'info');
+
+                // Clear remote video
+                const remoteVideo = document.getElementById('remote-video');
+                if (remoteVideo && remoteVideo.srcObject) {
+                    const tracks = remoteVideo.srcObject.getTracks();
+                    tracks.forEach(track => track.stop());
+                    remoteVideo.srcObject = null;
+                }
+
+                // Stop local stream if it exists
+                if (localStream) {
+                    localStream.getTracks().forEach(track => track.stop());
+                    setLocalStream(null);
+
+                    // Clear local video
+                    const localVideo = document.getElementById('local-video');
+                    if (localVideo) {
+                        localVideo.srcObject = null;
+                    }
+                }
+
+                // If we're using WebSockets, leave the room
+                if (wsClient && roomId) {
+                    // In a real implementation, we would send a message to leave the room
+                    // For now, we'll just reset the room ID
+                    setRoomId(null);
+                }
+            };
+
+            // Create a simulated remote video stream
+            const createSimulatedStream = () => {
+                // Create a canvas element to generate a fake video stream
+                const canvas = document.createElement('canvas');
+                canvas.width = 320;
+                canvas.height = 240;
+
+                // Get the canvas context for drawing
+                const ctx = canvas.getContext('2d');
+
+                // Draw a placeholder image/avatar
+                const drawPlaceholder = () => {
+                    // Clear canvas
+                    ctx.fillStyle = '#f3f4f6';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    // Draw circle for head
+                    ctx.fillStyle = '#9333ea';
+                    ctx.beginPath();
+                    ctx.arc(canvas.width/2, canvas.height/2 - 30, 50, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Draw body
+                    ctx.fillRect(canvas.width/2 - 40, canvas.height/2 + 20, 80, 80);
+
+                    // Draw text
+                    ctx.fillStyle = 'white';
+                    ctx.font = '20px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(selectedMember || 'Family Member', canvas.width/2, canvas.height/2 - 30);
+
+                    // Add timestamp to show movement
+                    const now = new Date();
+                    ctx.fillStyle = '#4b5563';
+                    ctx.font = '12px Arial';
+                    ctx.fillText(now.toLocaleTimeString(), canvas.width/2, canvas.height - 10);
+                };
+
+                // Start animation loop
+                setInterval(drawPlaceholder, 1000);
+                drawPlaceholder();
+
+                // Create a stream from the canvas
+                const stream = canvas.captureStream(30); // 30 FPS
+
+                // Add audio track (silent)
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const dst = oscillator.connect(audioContext.createMediaStreamDestination());
+                oscillator.start();
+
+                // Add the audio track to the stream
+                const audioTrack = dst.stream.getAudioTracks()[0];
+                stream.addTrack(audioTrack);
+
+                return stream;
+            };
+
             // Start video chat
             const startVideoChat = async (type = 'group') => {
                 try {
@@ -2396,7 +2577,8 @@
                         }
                     }
 
-                    // Set chat type
+                    // Show the video chat UI
+                    setShowVideoChat(true);
                     setChatType(type || 'group');
 
                     // Request access to webcam and microphone based on type
@@ -2458,6 +2640,64 @@
                         // For demo purposes, we'll simulate a peer connection
                         // In a real app, you would use WebRTC with a signaling server
 
+                        // Create a simulated remote video stream
+                        const createSimulatedStream = () => {
+                            // Create a canvas element to generate a fake video stream
+                            const canvas = document.createElement('canvas');
+                            canvas.width = 320;
+                            canvas.height = 240;
+
+                            // Get the canvas context for drawing
+                            const ctx = canvas.getContext('2d');
+
+                            // Draw a placeholder image/avatar
+                            const drawPlaceholder = () => {
+                                // Clear canvas
+                                ctx.fillStyle = '#f3f4f6';
+                                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                                // Draw circle for head
+                                ctx.fillStyle = '#9333ea';
+                                ctx.beginPath();
+                                ctx.arc(canvas.width/2, canvas.height/2 - 30, 50, 0, Math.PI * 2);
+                                ctx.fill();
+
+                                // Draw body
+                                ctx.fillRect(canvas.width/2 - 40, canvas.height/2 + 20, 80, 80);
+
+                                // Draw text
+                                ctx.fillStyle = 'white';
+                                ctx.font = '20px Arial';
+                                ctx.textAlign = 'center';
+                                ctx.fillText('Family Member', canvas.width/2, canvas.height/2 - 30);
+
+                                // Add timestamp to show movement
+                                const now = new Date();
+                                ctx.fillStyle = '#4b5563';
+                                ctx.font = '12px Arial';
+                                ctx.fillText(now.toLocaleTimeString(), canvas.width/2, canvas.height - 10);
+                            };
+
+                            // Start animation loop
+                            setInterval(drawPlaceholder, 1000);
+                            drawPlaceholder();
+
+                            // Create a stream from the canvas
+                            const stream = canvas.captureStream(30); // 30 FPS
+
+                            // Add audio track (silent)
+                            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                            const oscillator = audioContext.createOscillator();
+                            const dst = oscillator.connect(audioContext.createMediaStreamDestination());
+                            oscillator.start();
+
+                            // Add the audio track to the stream
+                            const audioTrack = dst.stream.getAudioTracks()[0];
+                            stream.addTrack(audioTrack);
+
+                            return stream;
+                        };
+
                         // Simulate a remote user joining after a short delay
                         setTimeout(() => {
                             // Create a simulated remote participant
@@ -2475,6 +2715,16 @@
                             if (callIndex !== -1) {
                                 calls[callIndex].participants[simulatedParticipant.id] = simulatedParticipant;
                                 localStorage.setItem('calls', JSON.stringify(calls));
+
+                                // Create a simulated video stream
+                                const fakeStream = createSimulatedStream();
+
+                                // Set the stream to the remote video element
+                                const remoteVideo = document.getElementById('remote-video');
+                                if (remoteVideo) {
+                                    remoteVideo.srcObject = fakeStream;
+                                    remoteVideo.play().catch(e => console.error('Error playing remote video:', e));
+                                }
 
                                 // Update UI to show connected state
                                 setIsRemoteConnected(true);
@@ -2574,7 +2824,66 @@
                 }
             };
 
-            // Initialize fake auth state
+            // Initialize WebSocket connection
+            const initializeWebSocket = React.useCallback(() => {
+                // Create a new WebSocket client
+                const client = new WebSocketClient();
+
+                // Set up event handlers
+                client.onConnectionStatusChange((status) => {
+                    setWsConnected(status === 'connected');
+                    if (status === 'connected') {
+                        showNotification('Connected to WebSocket server', 'success');
+                    } else if (status === 'disconnected') {
+                        showNotification('Disconnected from WebSocket server', 'info');
+                    } else if (status === 'error') {
+                        showNotification('Error connecting to WebSocket server', 'error');
+                    }
+                });
+
+                client.onUserJoined((userId, roomType) => {
+                    showNotification(`A family member joined the ${roomType} chat`, 'info');
+                    setIsRemoteConnected(true);
+
+                    // If we have a local stream, initiate a call to the new user
+                    if (localStream) {
+                        client.initiateCall(userId, localStream);
+                    }
+                });
+
+                client.onTrack((userId, stream) => {
+                    console.log('Received remote stream from user:', userId);
+
+                    // Add the remote stream to our state
+                    setRemoteStreams(prev => ({
+                        ...prev,
+                        [userId]: stream
+                    }));
+
+                    // Set the stream to the remote video element
+                    const remoteVideo = document.getElementById('remote-video');
+                    if (remoteVideo) {
+                        remoteVideo.srcObject = stream;
+                    }
+
+                    setIsRemoteConnected(true);
+                    setCallStatus('connected');
+                });
+
+                // Connect to the WebSocket server
+                client.connect()
+                    .then(() => {
+                        setWsClient(client);
+                    })
+                    .catch(error => {
+                        console.error('Failed to connect to WebSocket server:', error);
+                        showNotification('Failed to connect to WebSocket server. Using simulated mode.', 'error');
+                    });
+
+                return client;
+            }, [localStream]);
+
+            // Initialize fake auth state and WebSocket
             React.useEffect(() => {
                 // Check for existing fake user in localStorage
                 const fakeUserStr = localStorage.getItem('fakeUser');
@@ -2596,16 +2905,25 @@
                     }
                 }
 
+                // Initialize WebSocket connection
+                const client = initializeWebSocket();
+
                 // Set up beforeunload event to update status when user leaves
                 window.addEventListener('beforeunload', () => {
                     setUserStatus(false);
+                    if (client) {
+                        client.disconnect();
+                    }
                 });
 
                 // Clean up on component unmount
                 return () => {
                     setUserStatus(false);
+                    if (client) {
+                        client.disconnect();
+                    }
                 };
-            }, []);
+            }, [initializeWebSocket]);
 
             // Initialize dark mode from localStorage on component mount
             React.useEffect(() => {
@@ -3009,8 +3327,20 @@
 
                             {/* Video Chat Card */}
                             <div className="family-card">
-                                <div className="card-header">
-                                    Video & Voice Chat
+                                <div className="card-header flex justify-between items-center">
+                                    <span>Video & Voice Chat</span>
+                                    {/* WebSocket connection status indicator */}
+                                    {wsConnected ? (
+                                        <span className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-2 py-1 rounded-full flex items-center">
+                                            <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
+                                            Connected
+                                        </span>
+                                    ) : (
+                                        <span className="text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 px-2 py-1 rounded-full flex items-center">
+                                            <span className="w-2 h-2 bg-yellow-500 rounded-full mr-1"></span>
+                                            Simulated
+                                        </span>
+                                    )}
                                 </div>
                                 <div className="card-body">
                                     {showVideoChat ? (
@@ -3040,8 +3370,22 @@
                                                         {!isRemoteConnected && (
                                                             <div className="absolute inset-0 flex items-center justify-center text-gray-500">
                                                                 <div className="text-center">
-                                                                    <i className="fas fa-user-slash text-2xl mb-2"></i>
-                                                                    <div className="text-xs">No one connected</div>
+                                                                    {callStatus === 'dialing' ? (
+                                                                        <>
+                                                                            <i className="fas fa-circle-notch fa-spin text-2xl mb-2 text-blue-500"></i>
+                                                                            <div className="text-xs text-blue-500">Calling...</div>
+                                                                        </>
+                                                                    ) : callStatus === 'ringing' ? (
+                                                                        <>
+                                                                            <i className="fas fa-phone-volume text-2xl mb-2 text-yellow-500"></i>
+                                                                            <div className="text-xs text-yellow-500">Ringing...</div>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <i className="fas fa-user-slash text-2xl mb-2"></i>
+                                                                            <div className="text-xs">No one connected</div>
+                                                                        </>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         )}
@@ -3075,18 +3419,66 @@
                                                 {chatType === 'private' && (
                                                     <div>
                                                         <div className="text-sm font-semibold mb-1">Select Member</div>
-                                                        <select
-                                                            className="form-input text-sm py-1 w-full"
-                                                            value={selectedMember}
-                                                            onChange={(e) => setSelectedMember(e.target.value)}
-                                                        >
-                                                            <option value="">-- Select --</option>
-                                                            {attendees.map((attendee, index) => (
-                                                                <option key={index} value={attendee.name}>
-                                                                    {attendee.name} ({attendee.location})
-                                                                </option>
-                                                            ))}
-                                                        </select>
+                                                        <div className="flex gap-2">
+                                                            <select
+                                                                className="form-input text-sm py-1 flex-grow"
+                                                                value={selectedMember}
+                                                                onChange={(e) => setSelectedMember(e.target.value)}
+                                                                disabled={isCallInProgress}
+                                                            >
+                                                                <option value="">-- Select --</option>
+                                                                {attendees.map((attendee, index) => (
+                                                                    <option key={index} value={attendee.name}>
+                                                                        {attendee.name} ({attendee.location})
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+
+                                                            {!isCallInProgress ? (
+                                                                <button
+                                                                    onClick={handleCallButtonClick}
+                                                                    className="bg-green-500 hover:bg-green-600 text-white rounded-lg px-3 flex items-center justify-center"
+                                                                    disabled={!selectedMember}
+                                                                    title="Call this person"
+                                                                >
+                                                                    <i className="fas fa-phone-alt"></i>
+                                                                </button>
+                                                            ) : (
+                                                                <button
+                                                                    onClick={endCall}
+                                                                    className="bg-red-500 hover:bg-red-600 text-white rounded-lg px-3 flex items-center justify-center"
+                                                                    title="End call"
+                                                                >
+                                                                    <i className="fas fa-phone-slash"></i>
+                                                                </button>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Call status indicator */}
+                                                        {callStatus && (
+                                                            <div className="mt-2 text-xs">
+                                                                {callStatus === 'dialing' && (
+                                                                    <div className="text-blue-500">
+                                                                        <i className="fas fa-circle-notch fa-spin mr-1"></i> Dialing...
+                                                                    </div>
+                                                                )}
+                                                                {callStatus === 'ringing' && (
+                                                                    <div className="text-yellow-500">
+                                                                        <i className="fas fa-phone-volume mr-1"></i> Ringing...
+                                                                    </div>
+                                                                )}
+                                                                {callStatus === 'connected' && (
+                                                                    <div className="text-green-500">
+                                                                        <i className="fas fa-phone mr-1"></i> Connected
+                                                                    </div>
+                                                                )}
+                                                                {callStatus === 'ended' && (
+                                                                    <div className="text-red-500">
+                                                                        <i className="fas fa-phone-slash mr-1"></i> Call ended
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
