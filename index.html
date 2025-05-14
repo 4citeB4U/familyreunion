@@ -1,0 +1,2370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- 🔴 REGION: SEO -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hall Family Reunion Tracker</title>
+    <meta name="description" content="The Hall Family Reunion - Track attendees, share messages, and suggest activities!">
+
+    <!-- Tailwind CSS via CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Animate.css for animations -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
+
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- 🔴 END REGION: SEO -->
+
+    <!-- Dark mode styles -->
+    <style>
+        /* Dark mode styles */
+        .dark-mode {
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+
+        .dark-mode .family-card {
+            background-color: #1e1e1e;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .dark-mode .card-header {
+            background-color: #333;
+        }
+
+        .dark-mode .form-input {
+            background-color: #2d2d2d;
+            color: #e0e0e0;
+            border-color: #444;
+        }
+
+        .dark-mode .message-board {
+            background-color: #1a1a1a;
+            border-color: #333;
+        }
+
+        .dark-mode .message-item {
+            border-color: #333;
+        }
+
+        .dark-mode .message-item:hover {
+            background-color: #252525;
+        }
+
+        .dark-mode .message-content {
+            color: #e0e0e0;
+        }
+
+        /* Toggle switch */
+        .theme-switch {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #7a52c7;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+    </style>
+
+    <!-- 🔵 REGION: UI STYLES -->
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #f3f0f7;
+        }
+
+        .family-card {
+            transition: all 0.2s ease;
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(124, 58, 237, 0.15);
+            overflow: hidden;
+        }
+
+        .family-card:hover {
+            box-shadow: 0 6px 15px rgba(124, 58, 237, 0.25);
+        }
+
+        .card-header {
+            background-color: #9370DB;
+            color: white;
+            padding: 15px;
+            font-size: 1.5rem;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .card-body {
+            padding: 20px;
+        }
+
+        .balloon {
+            position: absolute;
+            width: 35px;
+            height: 45px;
+            background-color: #9370DB;
+            border-radius: 50%;
+            animation: float 12s ease-in-out infinite;
+            z-index: 1;
+            opacity: 0.7;
+        }
+
+        .balloon::before {
+            content: '';
+            position: absolute;
+            width: 2px;
+            height: 15px;
+            background-color: #b19cd9;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        @keyframes float {
+            0% { transform: translate(0, 0); }
+            25% { transform: translate(5px, -8px); } /* Reduced movement */
+            50% { transform: translate(8px, 0); } /* Reduced movement */
+            75% { transform: translate(-5px, -5px); } /* Reduced movement */
+            100% { transform: translate(0, 0); }
+        }
+
+        .balloon-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* Fireworks animation */
+        .firework {
+            position: absolute;
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            box-shadow: 0 0 10px 5px rgba(255, 255, 255, 0.8);
+            animation: explode 1s ease-out forwards;
+            opacity: 0;
+        }
+
+        @keyframes explode {
+            0% {
+                transform: scale(0.1);
+                opacity: 0;
+            }
+            50% {
+                opacity: 1;
+            }
+            100% {
+                transform: scale(1.5);
+                opacity: 0;
+            }
+        }
+
+        /* Sparkle animation */
+        .sparkle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background-color: white;
+            box-shadow: 0 0 8px 2px rgba(255, 255, 255, 0.8);
+            animation: twinkle 2s infinite;
+        }
+
+        @keyframes twinkle {
+            0% { opacity: 0; }
+            50% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #9370DB;
+            box-shadow: 0 0 0 2px rgba(147, 112, 219, 0.2);
+        }
+
+        .submit-btn {
+            background-color: #7a52c7;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+        }
+
+        /* Tally card styles */
+        .tally-card {
+            background-color: #f8f4ff;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+
+        .tally-card:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        .tally-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .tally-title {
+            font-weight: 600;
+            color: #7a52c7;
+            font-size: 1.1rem;
+        }
+
+        .tally-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .tally-item:last-child {
+            border-bottom: none;
+        }
+
+        .tally-bar-container {
+            flex-grow: 1;
+            height: 12px;
+            background-color: #e9e1f8;
+            border-radius: 6px;
+            margin: 0 15px;
+            overflow: hidden;
+        }
+
+        .tally-bar {
+            height: 100%;
+            background-color: #9370DB;
+            border-radius: 6px;
+        }
+
+        .tally-count {
+            font-weight: 600;
+            color: #7a52c7;
+            min-width: 30px;
+            text-align: right;
+        }
+
+        /* Flip card for RSVP list */
+        .flip-card {
+            perspective: 1000px;
+            height: 300px;
+            margin-bottom: 20px;
+        }
+
+        .flip-card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+        }
+
+        .flip-card.flipped .flip-card-inner {
+            transform: rotateY(180deg);
+        }
+
+        .flip-card-front, .flip-card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .flip-card-back {
+            transform: rotateY(180deg);
+            background-color: white;
+            padding: 15px;
+            overflow-y: auto;
+        }
+
+        .submit-btn:hover {
+            background-color: #63439e;
+        }
+
+        .message-board {
+            height: 300px;
+            overflow-y: auto;
+            margin-bottom: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background-color: #fafafa;
+        }
+
+        .message-item {
+            padding: 12px 16px;
+            border-bottom: 1px solid #e0e0e0;
+            transition: background-color 0.2s;
+        }
+
+        .message-item:hover {
+            background-color: #f5f0ff;
+        }
+
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+
+        .message-sender {
+            font-weight: 600;
+            color: #7a52c7;
+        }
+
+        .message-time {
+            font-size: 0.8rem;
+            color: #888;
+        }
+
+        .message-content {
+            line-height: 1.4;
+        }
+
+        .send-btn {
+            background-color: #7a52c7;
+            color: white;
+            border: none;
+            width: 50px;
+            height: 50px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .send-btn:hover {
+            background-color: #63439e;
+        }
+
+        .suggestion-list {
+            list-style-type: none;
+            padding-left: 0;
+            margin: 0;
+        }
+
+        .suggestion-list li {
+            padding: 8px 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .suggestion-list li::before {
+            content: "•";
+            color: #9370DB;
+            font-weight: bold;
+            display: inline-block;
+            width: 1em;
+            margin-right: 8px;
+            font-size: 20px;
+        }
+
+        .page-title {
+            text-align: center;
+            font-size: 3rem;
+            font-weight: 700;
+            color: #4b2e83;
+            margin-bottom: 0.5rem;
+            margin-top: 1rem;
+            font-family: 'Playfair Display', serif;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            letter-spacing: 0.5px;
+            position: relative;
+        }
+
+        .page-title::after {
+            content: '';
+            display: block;
+            width: 100px;
+            height: 3px;
+            background: linear-gradient(to right, #9370DB, #7a52c7);
+            margin: 10px auto 0;
+            border-radius: 3px;
+        }
+
+        .family-crest {
+            position: relative;
+            transition: all 0.3s ease;
+            animation: gentle-pulse 3s infinite alternate;
+        }
+
+        @keyframes gentle-pulse {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.05); }
+        }
+
+        .family-crest::before,
+        .family-crest::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 40px;
+            height: 2px;
+            background: linear-gradient(to right, transparent, rgba(122, 82, 199, 0.5));
+        }
+
+        .family-crest::before {
+            left: -60px;
+            transform: translateY(-50%);
+        }
+
+        .family-crest::after {
+            right: -60px;
+            transform: translateY(-50%) rotate(180deg);
+        }
+    </style>
+    <!-- 🔵 END REGION: UI STYLES -->
+</head>
+<body>
+    <!-- 🟢 REGION: CORE -->
+    <div id="app" class="min-h-screen"></div>
+    <!-- 🟢 END REGION: CORE -->
+
+    <!-- React, ReactDOM, and Babel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.21.4/babel.min.js"></script>
+
+    <!-- Dexie.js for IndexedDB -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dexie/3.2.3/dexie.min.js"></script>
+
+    <!-- Twilio SDK for SMS notifications -->
+    <script src="https://media.twiliocdn.com/sdk/js/client/v1.14/twilio.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+    <!-- 🧠 REGION: AI & MAIN APP CODE -->
+    <script type="text/babel">
+        // Create the main database
+        const db = new Dexie('HallFamilyReunionDB');
+
+        // Define database schema
+        db.version(1).stores({
+            attendees: '++id, name, people, location, attending, timestamp',
+            messages: '++id, sender, content, timestamp',
+            activities: '++id, title, description, votes, submitter, timestamp',
+            foods: '++id, title, description, votes, submitter, timestamp'
+        });
+
+        // Add function to send SMS notification
+        const sendSMSNotification = async (message) => {
+            try {
+                // IMPORTANT: In a production environment, you should NEVER include API keys in client-side code
+                // Instead, you would:
+                // 1. Create a backend API endpoint (e.g., using Node.js, Python, etc.)
+                // 2. Store your Twilio credentials securely in environment variables on the server
+                // 3. Call your backend API from here, which would then use the credentials to call Twilio
+
+                // For GitHub and demo purposes, we'll simulate the SMS sending
+                console.log('SIMULATED SMS:', message);
+
+                // Create a visual notification to show what would happen
+                const adminPhone = '+1 (414) 367-6211'; // Format for display only
+                const twilioPhone = '+1 (844) 951-3845'; // Format for display only
+
+                // Show notification in the app
+                showNotification(`Text message sent to admin: ${message}`, 'success');
+
+                // Create a more detailed SMS simulation popup
+                const smsElement = document.createElement('div');
+                smsElement.className = 'sms-simulation';
+                smsElement.innerHTML = `
+                    <div class="sms-header">
+                        <i class="fas fa-sms mr-2"></i> SMS Notification
+                        <button class="sms-close">&times;</button>
+                    </div>
+                    <div class="sms-body">
+                        <div class="sms-info">
+                            <div><strong>From:</strong> ${twilioPhone}</div>
+                            <div><strong>To:</strong> ${adminPhone}</div>
+                            <div><strong>Time:</strong> ${new Date().toLocaleTimeString()}</div>
+                        </div>
+                        <div class="sms-message">
+                            <div class="sms-bubble">
+                                ${message}
+                            </div>
+                        </div>
+                        <div class="sms-note">
+                            <i class="fas fa-info-circle mr-1"></i> This is a simulation. In production, this would be sent via Twilio API.
+                        </div>
+                    </div>
+                `;
+
+                document.body.appendChild(smsElement);
+
+                // Add styles for the SMS simulation
+                if (!document.getElementById('sms-simulation-styles')) {
+                    const style = document.createElement('style');
+                    style.id = 'sms-simulation-styles';
+                    style.textContent = `
+                        .sms-simulation {
+                            position: fixed;
+                            bottom: 20px;
+                            left: 20px;
+                            width: 320px;
+                            background-color: #f8f9fa;
+                            border-radius: 12px;
+                            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+                            z-index: 1000;
+                            overflow: hidden;
+                            animation: sms-slide-in 0.3s ease-out;
+                            font-family: 'Poppins', sans-serif;
+                        }
+
+                        @keyframes sms-slide-in {
+                            from { transform: translateY(100%); opacity: 0; }
+                            to { transform: translateY(0); opacity: 1; }
+                        }
+
+                        @keyframes sms-slide-out {
+                            from { transform: translateY(0); opacity: 1; }
+                            to { transform: translateY(100%); opacity: 0; }
+                        }
+
+                        .sms-header {
+                            background-color: #6b46c1;
+                            color: white;
+                            padding: 12px 15px;
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            font-weight: 600;
+                        }
+
+                        .sms-close {
+                            background: none;
+                            border: none;
+                            color: white;
+                            font-size: 20px;
+                            cursor: pointer;
+                            padding: 0;
+                            line-height: 1;
+                        }
+
+                        .sms-body {
+                            padding: 15px;
+                        }
+
+                        .sms-info {
+                            margin-bottom: 15px;
+                            font-size: 13px;
+                            color: #555;
+                        }
+
+                        .sms-message {
+                            margin-bottom: 15px;
+                        }
+
+                        .sms-bubble {
+                            background-color: #e2f5fe;
+                            border-radius: 18px;
+                            padding: 10px 15px;
+                            display: inline-block;
+                            max-width: 90%;
+                            position: relative;
+                            border-bottom-left-radius: 4px;
+                        }
+
+                        .sms-note {
+                            font-size: 12px;
+                            color: #888;
+                            font-style: italic;
+                            border-top: 1px solid #eee;
+                            padding-top: 10px;
+                        }
+                    `;
+                    document.head.appendChild(style);
+                }
+
+                // Add close button functionality
+                const closeButton = smsElement.querySelector('.sms-close');
+                closeButton.addEventListener('click', () => {
+                    smsElement.style.animation = 'sms-slide-out 0.3s ease-in forwards';
+                    setTimeout(() => {
+                        smsElement.remove();
+                    }, 300);
+                });
+
+                // Auto-remove after 8 seconds
+                setTimeout(() => {
+                    if (document.body.contains(smsElement)) {
+                        smsElement.style.animation = 'sms-slide-out 0.3s ease-in forwards';
+                        setTimeout(() => {
+                            smsElement.remove();
+                        }, 300);
+                    }
+                }, 8000);
+
+                return true;
+            } catch (error) {
+                console.error('Error sending SMS notification:', error);
+                showNotification('Error sending text message to admin', 'error');
+                return false;
+            }
+        };
+
+        // Speech synthesis setup
+        const speak = (text, voice = 'Emma') => {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                const voices = window.speechSynthesis.getVoices();
+                const selectedVoice = voices.find(v => v.name.includes(voice)) || voices[0];
+                utterance.voice = selectedVoice;
+                utterance.rate = 1;
+                utterance.pitch = 1;
+                window.speechSynthesis.speak(utterance);
+
+                return {
+                    stop: () => window.speechSynthesis.cancel(),
+                    finished: new Promise(resolve => {
+                        utterance.onend = resolve;
+                    })
+                };
+            }
+            return {
+                stop: () => {},
+                finished: Promise.resolve()
+            };
+        };
+
+        // Speech recognition setup
+        const setupSpeechRecognition = (onResult) => {
+            if ('webkitSpeechRecognition' in window) {
+                const recognition = new webkitSpeechRecognition();
+                recognition.continuous = false;
+                recognition.interimResults = false;
+                recognition.lang = 'en-US';
+
+                recognition.onresult = (event) => {
+                    const transcript = event.results[0][0].transcript;
+                    onResult(transcript);
+                };
+
+                return {
+                    start: () => recognition.start(),
+                    stop: () => recognition.stop()
+                };
+            }
+            return {
+                start: () => alert('Speech recognition not supported in your browser'),
+                stop: () => {}
+            };
+        };
+
+        // MCP Command system
+        const runMCPCommand = (command) => {
+            console.log(`Running MCP command: ${command}`);
+            // Log the command to IndexedDB
+            db.table('mcp_logs').add({
+                command,
+                timestamp: new Date().toISOString()
+            }).catch(err => console.error('Error logging MCP command:', err));
+
+            // Handle different commands
+            if (command === 'refresh_attendees') {
+                return db.attendees.toArray();
+            }
+
+            return Promise.resolve(`Executed: ${command}`);
+        };
+
+        // Agent Lee - Main Orchestrator
+        const AgentLee = {
+            name: 'Agent Lee',
+            role: 'Main System Orchestrator',
+            voice: 'Emma',
+            speak: (text) => speak(text, 'Emma'),
+            handleMessage: async (message) => {
+                if (message.toLowerCase().includes('refresh')) {
+                    return runMCPCommand('refresh_attendees');
+                }
+                return `I'm Agent Lee, your family reunion coordinator. How can I help with the Hall Family Reunion?`;
+            }
+        };
+
+        // Tim - Sales Agent (handling RSVPs/Invitations)
+        const AgentTim = {
+            name: 'Tim',
+            role: 'Invitation Specialist',
+            voice: 'Tom',
+            speak: (text) => speak(text, 'Tom'),
+            handleMessage: (message) => {
+                return `I'm Tim, the invitation specialist. I'll help you track RSVPs and attendance.`;
+            }
+        };
+
+        // Nicole - Showcase Agent (handling animations/visuals)
+        const AgentNicole = {
+            name: 'Nicole',
+            role: 'Visual Designer',
+            voice: 'Samantha',
+            speak: (text) => speak(text, 'Samantha'),
+            handleMessage: (message) => {
+                return `I'm Nicole, your visual designer. I've created the balloon animations and color scheme for your family reunion.`;
+            }
+        };
+
+        // Leonard - Resource Agent (handling activities/food)
+        const AgentLeonard = {
+            name: 'Leonard',
+            role: 'Activity Coordinator',
+            voice: 'Daniel',
+            speak: (text) => speak(text, 'Daniel'),
+            handleMessage: (message) => {
+                return `I'm Leonard, your activity coordinator. I'll help organize all the fun activities and food for the reunion!`;
+            }
+        };
+
+        // Main React Components
+        function App() {
+            const [attendees, setAttendees] = React.useState([]);
+            const [messages, setMessages] = React.useState([]);
+            const [activities, setActivities] = React.useState([
+                { id: 1, title: 'Potluck dinner', votes: 5 },
+                { id: 2, title: 'Outdoor games', votes: 3 },
+                { id: 3, title: 'Talent show', votes: 4 },
+                { id: 4, title: 'Family trivia', votes: 7 }
+            ]);
+            const [foods, setFoods] = React.useState([]);
+            const [isAdmin, setIsAdmin] = React.useState(true); // Default to admin for demo
+            const [notification, setNotification] = React.useState(null);
+            const [activeBalloons, setActiveBalloons] = React.useState([]);
+            const [currentAgent, setCurrentAgent] = React.useState(AgentLee);
+            const [isSpeaking, setIsSpeaking] = React.useState(false);
+            const [speechOutput, setSpeechOutput] = React.useState('');
+            const [darkMode, setDarkMode] = React.useState(false); // Dark mode state
+            // Video chat states
+            const [showVideoChat, setShowVideoChat] = React.useState(false);
+            const [localStream, setLocalStream] = React.useState(null);
+            const [chatType, setChatType] = React.useState('group');
+            const [selectedMember, setSelectedMember] = React.useState('');
+            const [isMicMuted, setIsMicMuted] = React.useState(false);
+            const [isCameraOff, setIsCameraOff] = React.useState(false);
+            const [isRemoteConnected, setIsRemoteConnected] = React.useState(false);
+            const [isPushToTalkActive, setIsPushToTalkActive] = React.useState(false);
+
+            // Messaging states
+            const [messageMode, setMessageMode] = React.useState('public');
+            const [privateMessageRecipient, setPrivateMessageRecipient] = React.useState('');
+
+            // Speech recognition instance
+            const [recognition, setRecognition] = React.useState(null);
+
+            // Form states
+            const [formData, setFormData] = React.useState({
+                name: '',
+                people: 1,
+                location: '',
+                message: '',
+                privateMessage: '',
+                address: '',
+                activity: '',
+                activityDesc: '',
+                food: '',
+                foodDesc: ''
+            });
+
+            // Initialize speech recognition
+            React.useEffect(() => {
+                const rec = setupSpeechRecognition((result) => {
+                    setSpeechOutput(result);
+                    handleVoiceCommand(result);
+                });
+                setRecognition(rec);
+
+                // Generate balloons only around the perimeter of the screen
+                const balloons = [];
+                const totalBalloons = 15; // Reduced number of balloons
+
+                for (let i = 0; i < totalBalloons; i++) {
+                    // Determine if this balloon should be on the top/bottom or left/right edge
+                    const isHorizontalEdge = i % 2 === 0;
+
+                    let top, left;
+
+                    if (isHorizontalEdge) {
+                        // Place on top or bottom edge
+                        top = (i % 4 === 0) ? '2vh' : '90vh'; // Either top or bottom
+                        left = (Math.random() * 90 + 5) + 'vw'; // Random horizontal position
+                    } else {
+                        // Place on left or right edge
+                        left = (i % 4 === 1) ? '2vw' : '95vw'; // Either left or right
+                        top = (Math.random() * 80 + 5) + 'vh'; // Random vertical position
+                    }
+
+                    balloons.push({
+                        id: i,
+                        top: top,
+                        left: left,
+                        size: Math.random() * 12 + 15 + 'px', // Slightly smaller balloons
+                        color: Math.random() > 0.6 ?
+                               '#9370DB' :
+                               Math.random() > 0.5 ? '#c2aae8' :
+                               Math.random() > 0.5 ? '#ff9cee' : '#a3c4ff',
+                        delay: Math.random() * 5 + 's',
+                        duration: Math.random() * 4 + 10 + 's'
+                    });
+                }
+                setActiveBalloons(balloons);
+
+                // Generate a few sparkles only around the edges
+                const sparkleContainer = document.createElement('div');
+                sparkleContainer.className = 'sparkle-container';
+                document.body.appendChild(sparkleContainer);
+
+                for (let i = 0; i < 10; i++) { // Reduced from 30 to 10
+                    const sparkle = document.createElement('div');
+                    sparkle.className = 'sparkle';
+
+                    // Place sparkles only around the edges
+                    if (i < 3) {
+                        // Top edge
+                        sparkle.style.top = '5vh';
+                        sparkle.style.left = (Math.random() * 90 + 5) + 'vw';
+                    } else if (i < 6) {
+                        // Bottom edge
+                        sparkle.style.top = '90vh';
+                        sparkle.style.left = (Math.random() * 90 + 5) + 'vw';
+                    } else if (i < 8) {
+                        // Left edge
+                        sparkle.style.top = (Math.random() * 80 + 10) + 'vh';
+                        sparkle.style.left = '5vw';
+                    } else {
+                        // Right edge
+                        sparkle.style.top = (Math.random() * 80 + 10) + 'vh';
+                        sparkle.style.left = '95vw';
+                    }
+
+                    sparkle.style.animationDelay = Math.random() * 5 + 's';
+                    sparkleContainer.appendChild(sparkle);
+                }
+
+                // Load data from IndexedDB
+                loadData();
+
+                // Add some example message data
+                setMessages([
+                    { id: 1, sender: 'Sarah', content: 'Hey everyone!', timestamp: new Date(Date.now() - 3600000).toISOString() },
+                    { id: 2, sender: 'Me', content: 'I can\'t wait to see you all!', timestamp: new Date(Date.now() - 1800000).toISOString() }
+                ]);
+            }, []);
+
+            // Load data from IndexedDB
+            const loadData = async () => {
+                try {
+                    const attendeeData = await db.attendees.toArray();
+                    setAttendees(attendeeData);
+
+                    const messageData = await db.messages.toArray();
+                    setMessages(messageData);
+
+                    const activityData = await db.activities.toArray();
+                    setActivities(activityData);
+
+                    const foodData = await db.foods.toArray();
+                    setFoods(foodData);
+                } catch (error) {
+                    console.error('Error loading data:', error);
+                    showNotification('Error loading data from database', 'error');
+                }
+            };
+
+            // Handle form changes
+            const handleChange = (e) => {
+                const { name, value } = e.target;
+                setFormData(prev => ({ ...prev, [name]: value }));
+            };
+
+            // Handle attendance submission
+            const handleAttendSubmit = async (e) => {
+                e.preventDefault();
+
+                try {
+                    const name = formData.name.trim();
+                    const location = formData.location.trim();
+
+                    // Check for duplicate (same name and location)
+                    const existingAttendee = attendees.find(a =>
+                        a.name.toLowerCase() === name.toLowerCase() &&
+                        a.location.toLowerCase() === location.toLowerCase()
+                    );
+
+                    if (existingAttendee) {
+                        showNotification(`${name} from ${location} has already registered. Please use a different name or location.`, 'error');
+                        return;
+                    }
+
+                    const attendee = {
+                        name: name,
+                        people: parseInt(formData.people),
+                        location: location,
+                        attending: true,
+                        timestamp: new Date().toISOString()
+                    };
+
+                    const id = await db.attendees.add(attendee);
+                    setAttendees([...attendees, { ...attendee, id }]);
+
+                    // Don't reset the name so it can be used in the message board
+                    setFormData(prev => ({ ...prev, people: 1, location: '' }));
+
+                    // Show notification
+                    showNotification(`${attendee.name} has registered for the reunion!`, 'success');
+
+                    // Send text notification to the registered person's phone
+                    // This assumes they entered a phone number in the location field for demo purposes
+                    // In a real app, you'd have a dedicated phone field
+                    sendSMSNotification(`Thank you ${attendee.name}! You're registered for the Hall Family Reunion with ${attendee.people} ${attendee.people > 1 ? 'people' : 'person'} from ${attendee.location}.`);
+
+                    // Agent speaks
+                    AgentTim.speak(`Great news! ${attendee.name} from ${attendee.location} has registered for the reunion with ${attendee.people} ${attendee.people > 1 ? 'people' : 'person'}.`);
+
+                    // Create fireworks celebration only near the submit button
+                    createFireworks('submit-rsvp', 15);
+                } catch (error) {
+                    console.error('Error adding attendee:', error);
+                    showNotification('Error registering for the reunion', 'error');
+                }
+            };
+
+            // Common emojis for quick access
+            const commonEmojis = [
+                "😀", "😂", "❤️", "👍", "👏", "🎉", "🥳", "🤗",
+                "😊", "🙏", "👋", "🔥", "💯", "⭐", "🎂", "🎁",
+                "🏆", "🥇", "🎯", "🎵", "🎸", "🎬", "📸", "🍕",
+                "🍔", "🍦", "🍰", "🍷", "🥂", "☕", "🌈", "🌞",
+                "🌹", "🌺", "🌴", "🌊", "🏖️", "🏡", "🚗", "✈️",
+                "🚀", "⏰", "📱", "💻", "📷", "🎮", "🎲", "🎨",
+                "📚", "💪", "🏃‍♂️", "🧠"
+            ];
+
+            // Activity suggestions for dropdown
+            const activitySuggestions = [
+                // Backyard Games
+                { category: "Backyard Games", name: "Cornhole (Bean Bag Toss)", description: "Easy to learn, fun for all ages, and great for friendly competition." },
+                { category: "Backyard Games", name: "Giant Jenga", description: "Oversized blocks add excitement and suspense as the tower grows taller." },
+                { category: "Backyard Games", name: "Backyard Connect Four", description: "A jumbo version of the classic game that's visually fun and interactive." },
+                { category: "Backyard Games", name: "Bocce Ball", description: "Simple rules and suitable for large or small groups, bocce is a timeless outdoor favorite." },
+                { category: "Backyard Games", name: "Croquet", description: "Set up a course and compete to see who can navigate their ball through the wickets first." },
+                { category: "Backyard Games", name: "Spikeball", description: "Fast-paced and energetic, Spikeball is like a cross between volleyball and four square." },
+                { category: "Backyard Games", name: "Tic Tac Toe (Yard Dice or Giant Board)", description: "Supersized pieces make this classic game more engaging outdoors." },
+                { category: "Backyard Games", name: "Monster Toss or Ladder Toss", description: "Throw balls or beanbags at targets for points-easy to set up and play." },
+                { category: "Backyard Games", name: "Relay Races & Obstacle Courses", description: "Set up simple races or challenges using cones, ropes, or household items." },
+                { category: "Backyard Games", name: "Simon Says or Untangle", description: "Group games that encourage movement, teamwork, and lots of laughs." },
+
+                // Board & Card Games
+                { category: "Board & Card Games", name: "Uno", description: "Fast-paced and easy for all ages." },
+                { category: "Board & Card Games", name: "Exploding Kittens", description: "Silly, quick, and family-friendly." },
+                { category: "Board & Card Games", name: "Ticket to Ride", description: "Strategic but accessible, with a fun train theme." },
+                { category: "Board & Card Games", name: "Codenames", description: "Great for larger groups and encourages teamwork." },
+                { category: "Board & Card Games", name: "Jenga", description: "The classic tabletop version is just as fun as the giant outdoor one." },
+                { category: "Board & Card Games", name: "Clue", description: "A mystery-solving game that gets everyone thinking." },
+                { category: "Board & Card Games", name: "Sorry! and Trouble", description: "Simple, luck-based games that are easy for younger kids to join." },
+                { category: "Board & Card Games", name: "Qwirkle", description: "Combines matching colors and shapes; easy to learn and play outdoors on a picnic table." },
+                { category: "Board & Card Games", name: "Scattergories", description: "Creative and fast-paced word game-great for groups." },
+                { category: "Board & Card Games", name: "Throw Throw Burrito", description: "Combines card play with soft-foam burrito throwing for active fun." },
+                { category: "Board & Card Games", name: "Happy Salmon", description: "High-energy, quick, and perfect for family gatherings." }
+            ];
+
+            // Handle emoji selection
+            const addEmojiToMessage = (emoji) => {
+                setFormData(prev => ({
+                    ...prev,
+                    message: prev.message + emoji
+                }));
+
+                // Focus back on the message input
+                document.getElementById('message').focus();
+            };
+
+            // Handle activity selection from dropdown
+            const handleActivitySelect = (activity) => {
+                // Set the form data with the selected activity
+                setFormData(prev => ({
+                    ...prev,
+                    activity: activity.name,
+                    activityDesc: activity.description
+                }));
+
+                // Show the selected activity in the input field
+                document.getElementById('add-suggestion').value = activity.name;
+
+                // Don't auto-submit - let the user review and submit manually
+                showNotification(`Selected "${activity.name}". Click "Add" to submit.`, 'info');
+            };
+
+            // Handle message submission for the message board
+            const handleMessageSubmit = async (e) => {
+                e.preventDefault();
+                if (!formData.message.trim()) return;
+
+                try {
+                    // Use the name from the RSVP form or "Guest" if not provided
+                    const sender = formData.name.trim() || "Guest";
+
+                    const message = {
+                        sender: sender,
+                        content: formData.message,
+                        timestamp: new Date().toISOString()
+                    };
+
+                    const id = await db.messages.add(message);
+                    setMessages([...messages, { ...message, id }]);
+
+                    // Reset message form
+                    setFormData(prev => ({ ...prev, message: '' }));
+
+                    // Show notification
+                    showNotification(`Message posted to the family board!`, 'success');
+
+                    // Send text notification to admin
+                    sendSMSNotification(`New family message from ${message.sender}: ${message.content.substring(0, 50)}${message.content.length > 50 ? '...' : ''}`);
+
+                    // No fireworks for messages as requested
+                } catch (error) {
+                    console.error('Error adding message:', error);
+                    showNotification('Error posting message', 'error');
+                }
+            };
+
+            // Handle activity submission
+            const handleActivitySubmit = async (e) => {
+                e.preventDefault();
+
+                // Validate input
+                if (!formData.activity || formData.activity.trim() === '') {
+                    showNotification('Please enter an activity or select one from the dropdown', 'error');
+                    return;
+                }
+
+                try {
+                    // Check for duplicate activity
+                    const activityTitle = formData.activity.trim();
+                    const existingActivity = activities.find(a =>
+                        a.title.toLowerCase() === activityTitle.toLowerCase()
+                    );
+
+                    if (existingActivity) {
+                        // If it already exists, just add a vote instead
+                        handleVote('activity', existingActivity.id);
+                        showNotification(`"${activityTitle}" already exists. Added a vote instead!`, 'info');
+
+                        // Reset form
+                        setFormData(prev => ({ ...prev, activity: '', activityDesc: '' }));
+
+                        // Reset dropdown
+                        document.getElementById('activity-dropdown').value = '';
+
+                        return;
+                    }
+
+                    // Create new activity
+                    const activity = {
+                        title: activityTitle,
+                        description: formData.activityDesc || '',
+                        votes: 1, // Start with 1 vote (the submitter's vote)
+                        submitter: formData.name || 'Anonymous',
+                        timestamp: new Date().toISOString()
+                    };
+
+                    const id = await db.activities.add(activity);
+                    setActivities([...activities, { ...activity, id }]);
+
+                    // Reset form
+                    setFormData(prev => ({ ...prev, activity: '', activityDesc: '' }));
+
+                    // Reset dropdown
+                    document.getElementById('activity-dropdown').value = '';
+
+                    // Show notification
+                    showNotification(`Activity "${activityTitle}" added with 1 vote!`, 'success');
+
+                    // Agent speaks
+                    AgentLeonard.speak(`New activity suggestion: ${activity.title}`);
+                } catch (error) {
+                    console.error('Error adding activity:', error);
+                    showNotification('Error adding activity suggestion', 'error');
+                }
+            };
+
+            // Handle food submission
+            const handleFoodSubmit = async (e) => {
+                e.preventDefault();
+                try {
+                    const food = {
+                        title: formData.food,
+                        description: formData.foodDesc,
+                        votes: 0,
+                        submitter: formData.name || 'Anonymous',
+                        timestamp: new Date().toISOString()
+                    };
+
+                    const id = await db.foods.add(food);
+                    setFoods([...foods, { ...food, id }]);
+
+                    // Reset form
+                    setFormData(prev => ({ ...prev, food: '', foodDesc: '' }));
+
+                    // Show notification
+                    showNotification(`Food suggestion added!`, 'success');
+
+                    // Agent speaks
+                    AgentLeonard.speak(`New food suggestion: ${food.title}`);
+                } catch (error) {
+                    console.error('Error adding food:', error);
+                    showNotification('Error adding food suggestion', 'error');
+                }
+            };
+
+            // Show notification
+            const showNotification = (message, type = 'info') => {
+                setNotification({ message, type });
+                setTimeout(() => setNotification(null), 5000);
+            };
+
+            // Create fireworks animation near the submit button
+            const createFireworks = (buttonId = 'submit-rsvp', count = 15) => {
+                // Get the button's position
+                const button = document.getElementById(buttonId);
+                if (!button) return;
+
+                const rect = button.getBoundingClientRect();
+                const buttonCenterX = rect.left + rect.width / 2;
+                const buttonTop = rect.top;
+
+                const fireworksContainer = document.createElement('div');
+                fireworksContainer.className = 'fireworks-container';
+                fireworksContainer.style.position = 'fixed';
+                fireworksContainer.style.top = '0';
+                fireworksContainer.style.left = '0';
+                fireworksContainer.style.width = '100%';
+                fireworksContainer.style.height = '100%';
+                fireworksContainer.style.pointerEvents = 'none';
+                fireworksContainer.style.zIndex = '1000';
+                document.body.appendChild(fireworksContainer);
+
+                const colors = ['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#ff00ff', '#ff9900', '#9900ff'];
+
+                // Create fireworks only around the button area
+                for (let i = 0; i < count; i++) {
+                    setTimeout(() => {
+                        const firework = document.createElement('div');
+                        firework.className = 'firework';
+
+                        // Position fireworks around the button
+                        const offsetX = (Math.random() - 0.5) * 200; // -100px to +100px from button center
+                        const offsetY = -Math.random() * 100 - 50; // 50-150px above the button
+
+                        firework.style.left = (buttonCenterX + offsetX) + 'px';
+                        firework.style.top = (buttonTop + offsetY) + 'px';
+                        firework.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                        firework.style.boxShadow = `0 0 10px 5px ${firework.style.backgroundColor}`;
+
+                        fireworksContainer.appendChild(firework);
+
+                        // Remove firework after animation completes
+                        setTimeout(() => {
+                            firework.remove();
+                        }, 1000);
+                    }, i * 100); // Stagger the fireworks
+                }
+
+                // Remove container after all fireworks are done
+                setTimeout(() => {
+                    fireworksContainer.remove();
+                }, count * 100 + 1500);
+            };
+
+            // Handle vote
+            const handleVote = async (type, id) => {
+                try {
+                    if (type === 'activity') {
+                        const activity = activities.find(a => a.id === id);
+                        if (activity) {
+                            const updatedActivity = { ...activity, votes: activity.votes + 1 };
+                            await db.activities.update(id, { votes: updatedActivity.votes });
+                            setActivities(activities.map(a => a.id === id ? updatedActivity : a));
+                            showNotification(`Voted for ${activity.title}`, 'success');
+                        }
+                    } else if (type === 'food') {
+                        const food = foods.find(f => f.id === id);
+                        if (food) {
+                            const updatedFood = { ...food, votes: food.votes + 1 };
+                            await db.foods.update(id, { votes: updatedFood.votes });
+                            setFoods(foods.map(f => f.id === id ? updatedFood : f));
+                            showNotification(`Voted for ${food.title}`, 'success');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error voting:', error);
+                    showNotification('Error recording vote', 'error');
+                }
+            };
+
+            // Handle voice command
+            const handleVoiceCommand = (command) => {
+                if (!command) return;
+
+                const cmd = command.toLowerCase();
+
+                if (cmd.includes('submit') || cmd.includes('register') || cmd.includes('rsvp')) {
+                    document.getElementById('submit-rsvp').click();
+                } else if (cmd.includes('message') || cmd.includes('chat') || cmd.includes('send')) {
+                    // If it's a message command, set the message input and send it
+                    document.getElementById('message').value = cmd;
+                    setFormData(prev => ({ ...prev, message: cmd }));
+                    document.getElementById('send-message').click();
+                } else if (cmd.includes('suggest') || cmd.includes('activity')) {
+                    document.getElementById('add-suggestion').focus();
+                } else {
+                    // Use the voice command as a message for the family board
+                    document.getElementById('message').value = cmd;
+                    setFormData(prev => ({ ...prev, message: cmd }));
+                    document.getElementById('send-message').click();
+                }
+            };
+
+            // Start listening
+            const startListening = (mode = 'public') => {
+                if (recognition) {
+                    setSpeechOutput('Listening...');
+
+                    // Set the mode for the recognition result handler
+                    recognition.onresult = (event) => {
+                        const result = event.results[0][0].transcript;
+                        setSpeechOutput(result);
+
+                        if (mode === 'private') {
+                            // Set the private message input
+                            setFormData(prev => ({ ...prev, privateMessage: result }));
+                        } else {
+                            // Set the public message input
+                            setFormData(prev => ({ ...prev, message: result }));
+                            handleVoiceCommand(result);
+                        }
+                    };
+
+                    recognition.start();
+                }
+            };
+
+            // Stop speaking
+            const stopSpeaking = () => {
+                window.speechSynthesis.cancel();
+                setIsSpeaking(false);
+            };
+
+            // Change current agent
+            const changeAgent = (agent) => {
+                setCurrentAgent(agent);
+                agent.speak(`Hello, I'm ${agent.name}, the ${agent.role}.`);
+            };
+
+            // Toggle dark mode
+            const toggleDarkMode = () => {
+                const newDarkMode = !darkMode;
+                setDarkMode(newDarkMode);
+
+                // Apply dark mode class to body
+                if (newDarkMode) {
+                    document.body.classList.add('dark-mode');
+                } else {
+                    document.body.classList.remove('dark-mode');
+                }
+
+                // Save preference to localStorage
+                localStorage.setItem('darkMode', newDarkMode);
+            };
+
+
+
+            // Clear the entire attendee list (admin only)
+            const clearAttendeeList = async () => {
+                if (!isAdmin) return;
+
+                if (window.confirm('Are you sure you want to clear the entire RSVP list? This cannot be undone.')) {
+                    try {
+                        // Clear the IndexedDB table
+                        await db.attendees.clear();
+
+                        // Update state
+                        setAttendees([]);
+
+                        showNotification('RSVP list has been cleared', 'success');
+                    } catch (error) {
+                        console.error('Error clearing attendee list:', error);
+                        showNotification('Error clearing RSVP list', 'error');
+                    }
+                }
+            };
+
+            // Remove a single attendee (admin only)
+            const removeAttendee = async (id) => {
+                if (!isAdmin) return;
+
+                try {
+                    // Remove from IndexedDB
+                    await db.attendees.delete(id);
+
+                    // Update state
+                    setAttendees(attendees.filter(a => a.id !== id));
+
+                    showNotification('Attendee removed', 'success');
+                } catch (error) {
+                    console.error('Error removing attendee:', error);
+                    showNotification('Error removing attendee', 'error');
+                }
+            };
+
+            // Remove an activity (admin only)
+            const removeActivity = async (id) => {
+                if (!isAdmin) return;
+
+                try {
+                    // Remove from IndexedDB
+                    await db.activities.delete(id);
+
+                    // Update state
+                    setActivities(activities.filter(a => a.id !== id));
+
+                    showNotification('Activity removed', 'success');
+                } catch (error) {
+                    console.error('Error removing activity:', error);
+                    showNotification('Error removing activity', 'error');
+                }
+            };
+
+            // Add emoji to private message
+            const addEmojiToPrivateMessage = (emoji) => {
+                setFormData(prev => ({
+                    ...prev,
+                    privateMessage: prev.privateMessage + emoji
+                }));
+
+                // Focus back on the private message input
+                document.getElementById('private-message').focus();
+            };
+
+            // Handle private message submission
+            const handlePrivateMessageSubmit = async (e) => {
+                e.preventDefault();
+                if (!formData.privateMessage.trim() || !privateMessageRecipient) return;
+
+                try {
+                    // Use the name from the RSVP form or "Guest" if not provided
+                    const sender = formData.name.trim() || "Guest";
+
+                    const message = {
+                        sender: sender,
+                        recipient: privateMessageRecipient,
+                        content: formData.privateMessage,
+                        timestamp: new Date().toISOString()
+                    };
+
+                    const id = await db.messages.add(message);
+                    setMessages([...messages, { ...message, id }]);
+
+                    // Reset private message form
+                    setFormData(prev => ({ ...prev, privateMessage: '' }));
+
+                    // Show notification
+                    showNotification(`Private message sent to ${privateMessageRecipient}!`, 'success');
+
+                    // Send text notification to admin
+                    sendSMSNotification(`New private message from ${message.sender} to ${message.recipient}`);
+                } catch (error) {
+                    console.error('Error sending private message:', error);
+                    showNotification('Error sending private message', 'error');
+                }
+            };
+
+            // Start video chat
+            const startVideoChat = async (type = 'group') => {
+                try {
+                    // Set chat type
+                    setChatType(type || 'group');
+
+                    // Request access to webcam and microphone based on type
+                    const constraints = {
+                        video: type !== 'audio' && type !== 'cb',
+                        audio: true
+                    };
+
+                    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                    setLocalStream(stream);
+                    setShowVideoChat(true);
+
+                    // Reset states
+                    setIsMicMuted(false);
+                    setIsCameraOff(false);
+                    setIsRemoteConnected(false); // In a real app, this would be set when someone connects
+
+                    // Set the stream to the video element
+                    const videoElement = document.getElementById('local-video');
+                    if (videoElement && stream.getVideoTracks().length > 0) {
+                        videoElement.srcObject = stream;
+                    }
+
+                    // For demo purposes, simulate a remote connection after a delay
+                    if (type === 'private' || type === 'cb') {
+                        setTimeout(() => {
+                            setIsRemoteConnected(true);
+                            showNotification(`${selectedMember || 'A family member'} has joined the chat!`, 'success');
+                        }, 3000);
+                    }
+
+                    showNotification(`${type.charAt(0).toUpperCase() + type.slice(1)} chat started!`, 'success');
+                } catch (error) {
+                    console.error('Error accessing media devices:', error);
+                    showNotification('Error accessing camera or microphone. Please check permissions.', 'error');
+                }
+            };
+
+            // Stop video chat
+            const stopVideoChat = () => {
+                if (localStream) {
+                    localStream.getTracks().forEach(track => track.stop());
+                    setLocalStream(null);
+                }
+                setShowVideoChat(false);
+                setIsRemoteConnected(false);
+                showNotification('Chat session ended', 'info');
+            };
+
+            // Toggle microphone
+            const toggleMicrophone = () => {
+                if (localStream) {
+                    const audioTracks = localStream.getAudioTracks();
+                    if (audioTracks.length > 0) {
+                        const track = audioTracks[0];
+                        track.enabled = !track.enabled;
+                        setIsMicMuted(!track.enabled);
+                        showNotification(`Microphone ${track.enabled ? 'unmuted' : 'muted'}`, 'info');
+                    }
+                }
+            };
+
+            // Toggle camera
+            const toggleCamera = () => {
+                if (localStream) {
+                    const videoTracks = localStream.getVideoTracks();
+                    if (videoTracks.length > 0) {
+                        const track = videoTracks[0];
+                        track.enabled = !track.enabled;
+                        setIsCameraOff(!track.enabled);
+                        showNotification(`Camera ${track.enabled ? 'turned on' : 'turned off'}`, 'info');
+                    }
+                }
+            };
+
+            // Push-to-talk functionality
+            const startPushToTalk = () => {
+                setIsPushToTalkActive(true);
+                if (localStream) {
+                    const audioTracks = localStream.getAudioTracks();
+                    if (audioTracks.length > 0) {
+                        audioTracks[0].enabled = true;
+                    }
+                }
+                showNotification('Transmitting audio...', 'info');
+            };
+
+            const stopPushToTalk = () => {
+                setIsPushToTalkActive(false);
+                if (localStream) {
+                    const audioTracks = localStream.getAudioTracks();
+                    if (audioTracks.length > 0) {
+                        audioTracks[0].enabled = false;
+                    }
+                }
+            };
+
+            // Initialize dark mode from localStorage on component mount
+            React.useEffect(() => {
+                const savedDarkMode = localStorage.getItem('darkMode') === 'true';
+                setDarkMode(savedDarkMode);
+                if (savedDarkMode) {
+                    document.body.classList.add('dark-mode');
+                }
+            }, []);
+
+            // Calculate statistics
+            const totalAttendees = attendees.reduce((sum, attendee) => sum + attendee.people, 0);
+            const uniqueLocations = [...new Set(attendees.map(a => a.location))].filter(Boolean).length;
+
+            return (
+                <div className={`min-h-screen ${darkMode ? 'dark-mode' : 'bg-gray-50'}`}>
+                    {/* Dark/Light Mode Toggle */}
+                    <div className="theme-switch">
+                        <label className="switch">
+                            <input
+                                type="checkbox"
+                                onChange={toggleDarkMode}
+                                checked={darkMode}
+                            />
+                            <span className="slider"></span>
+                        </label>
+                    </div>
+
+                    {/* Balloon Container - keeps balloons at the top */}
+                    <div className="balloon-container">
+                        {activeBalloons.map(balloon => (
+                            <div
+                                key={balloon.id}
+                                className="balloon"
+                                style={{
+                                    top: balloon.top,
+                                    left: balloon.left,
+                                    width: balloon.size,
+                                    height: parseInt(balloon.size) * 1.3 + 'px',
+                                    backgroundColor: balloon.color,
+                                    animationDelay: balloon.delay,
+                                    animationDuration: balloon.duration
+                                }}
+                            />
+                        ))}
+                    </div>
+
+                    {/* Notification */}
+                    {notification && (
+                        <div className={`fixed top-5 right-5 p-4 rounded-lg shadow-lg animate__animated animate__fadeIn z-50 ${
+                            notification.type === 'success' ? 'bg-green-500 text-white' :
+                            notification.type === 'error' ? 'bg-red-500 text-white' :
+                            'bg-blue-500 text-white'
+                        }`}>
+                            <p>{notification.message}</p>
+                        </div>
+                    )}
+
+                    <div className="container mx-auto px-4 py-8">
+                        <div className="text-center mb-12">
+                            <div className="family-crest mx-auto mb-4">
+                                <svg width="120" height="120" viewBox="0 0 120 120" className="mx-auto">
+                                    <defs>
+                                        <linearGradient id="crestGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                            <stop offset="0%" stopColor="#7a52c7" />
+                                            <stop offset="100%" stopColor="#9370DB" />
+                                        </linearGradient>
+                                    </defs>
+                                    <path d="M60,10 L10,40 L10,90 C10,95 15,110 60,110 C105,110 110,95 110,90 L110,40 L60,10 Z"
+                                        fill="url(#crestGradient)"
+                                        stroke="#5a3a9e"
+                                        strokeWidth="2" />
+                                    <path d="M60,20 L20,45 L20,85 C20,90 25,100 60,100 C95,100 100,90 100,85 L100,45 L60,20 Z"
+                                        fill="none"
+                                        stroke="#ffffff"
+                                        strokeWidth="1"
+                                        strokeDasharray="2" />
+                                    <text x="60" y="65"
+                                        fontFamily="serif"
+                                        fontSize="24"
+                                        textAnchor="middle"
+                                        fill="#ffffff"
+                                        fontWeight="bold">H</text>
+                                    <path d="M40,75 L80,75" stroke="#ffffff" strokeWidth="2" />
+                                    <path d="M45,85 L75,85" stroke="#ffffff" strokeWidth="1" />
+                                    <circle cx="60" cy="50" r="15" fill="none" stroke="#ffffff" strokeWidth="1" />
+                                </svg>
+                            </div>
+                            <h1 className="page-title text-4xl md:text-5xl font-bold text-purple-800 mb-2">Hall Family Reunion</h1>
+                            <p className="text-xl text-purple-600">Celebrating Our Family Heritage</p>
+                        </div>
+
+
+
+                        {/* Regular RSVP Card */}
+                        <div className="family-card mb-8">
+                            <div className="card-header">
+                                RSVP
+                            </div>
+                            <div className="card-body">
+                                <form onSubmit={handleAttendSubmit}>
+                                    <label className="block text-gray-700 mb-2" htmlFor="name">Name</label>
+                                    <input
+                                        type="text"
+                                        id="name"
+                                        name="name"
+                                        value={formData.name}
+                                        onChange={handleChange}
+                                        className="form-input"
+                                        placeholder="Your Name"
+                                        required
+                                    />
+
+                                    <label className="block text-gray-700 mb-2" htmlFor="people">Number Attending</label>
+                                    <input
+                                        type="number"
+                                        id="people"
+                                        name="people"
+                                        value={formData.people}
+                                        onChange={handleChange}
+                                        min="1"
+                                        max="20"
+                                        className="form-input"
+                                        required
+                                    />
+
+                                    <label className="block text-gray-700 mb-2" htmlFor="location">Location</label>
+                                    <input
+                                        type="text"
+                                        id="location"
+                                        name="location"
+                                        value={formData.location}
+                                        onChange={handleChange}
+                                        className="form-input"
+                                        placeholder="City, State"
+                                        required
+                                    />
+
+                                    <button
+                                        id="submit-rsvp"
+                                        type="submit"
+                                        className="submit-btn"
+                                    >
+                                        Submit
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+
+                        {/* First Row: Message Board and Video Chat */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                            {/* Message Board Card */}
+                            <div className="family-card">
+                                <div className="card-header flex justify-between items-center">
+                                    <span>Family Message Board</span>
+                                    <div className="flex items-center">
+                                        <button
+                                            onClick={() => setMessageMode('public')}
+                                            className={`text-xs py-1 px-2 rounded-l-lg ${messageMode === 'public'
+                                                ? 'bg-white text-purple-700'
+                                                : 'bg-purple-700 text-white'}`}
+                                            title="Public Messages"
+                                        >
+                                            <i className="fas fa-globe-americas mr-1"></i> Public
+                                        </button>
+                                        <button
+                                            onClick={() => setMessageMode('private')}
+                                            className={`text-xs py-1 px-2 rounded-r-lg ${messageMode === 'private'
+                                                ? 'bg-white text-purple-700'
+                                                : 'bg-purple-700 text-white'}`}
+                                            title="Private Messages"
+                                        >
+                                            <i className="fas fa-user-lock mr-1"></i> Private
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="card-body">
+                                    {messageMode === 'public' ? (
+                                        /* Public Message Board */
+                                        <>
+                                            <div className="message-board mb-4">
+                                                {messages
+                                                    .filter(m => !m.recipient) // Only public messages
+                                                    .map((message, index) => (
+                                                        <div key={index} className="message-item">
+                                                            <div className="message-header">
+                                                                <span className="message-sender">{message.sender}</span>
+                                                                <span className="message-time">
+                                                                    {new Date(message.timestamp).toLocaleString()}
+                                                                </span>
+                                                            </div>
+                                                            <div className="message-content">
+                                                                {message.content}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                {messages.filter(m => !m.recipient).length === 0 && (
+                                                    <div className="text-center py-8 text-gray-500">
+                                                        <i className="fas fa-comments text-2xl mb-2"></i>
+                                                        <p>No messages yet. Be the first to post!</p>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="flex flex-col">
+                                                <input
+                                                    type="text"
+                                                    id="message"
+                                                    name="message"
+                                                    value={formData.message}
+                                                    onChange={handleChange}
+                                                    className="form-input mb-2"
+                                                    placeholder="Share a message with the family..."
+                                                />
+
+                                                {/* Emoji Picker */}
+                                                <div className="emoji-picker mb-3 p-2 bg-gray-100 dark:bg-gray-800 rounded-lg overflow-x-auto whitespace-nowrap">
+                                                    {commonEmojis.map((emoji, index) => (
+                                                        <button
+                                                            key={index}
+                                                            onClick={() => addEmojiToMessage(emoji)}
+                                                            className="emoji-btn inline-block mx-1 text-xl hover:transform hover:scale-125 transition-transform"
+                                                            title={`Add ${emoji} emoji`}
+                                                        >
+                                                            {emoji}
+                                                        </button>
+                                                    ))}
+                                                </div>
+
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        id="send-message"
+                                                        onClick={handleMessageSubmit}
+                                                        className="submit-btn flex-grow"
+                                                    >
+                                                        Post Message
+                                                    </button>
+
+                                                    <button
+                                                        onClick={startListening}
+                                                        className="bg-purple-600 hover:bg-purple-700 text-white rounded-lg p-3 flex items-center justify-center"
+                                                        title="Voice Input"
+                                                    >
+                                                        <i className="fas fa-microphone"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        /* Private Message Interface */
+                                        <>
+                                            <div className="mb-4">
+                                                <div className="flex items-center mb-3">
+                                                    <div className="text-sm font-semibold mr-2">Select Recipient:</div>
+                                                    <select
+                                                        className="form-input text-sm py-1 flex-grow"
+                                                        value={privateMessageRecipient}
+                                                        onChange={(e) => setPrivateMessageRecipient(e.target.value)}
+                                                    >
+                                                        <option value="">-- Select Family Member --</option>
+                                                        {attendees.map((attendee, index) => (
+                                                            <option key={index} value={attendee.name}>
+                                                                {attendee.name} ({attendee.location})
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+
+                                                <div className="message-board mb-4">
+                                                    {privateMessageRecipient ? (
+                                                        <>
+                                                            {messages
+                                                                .filter(m =>
+                                                                    (m.sender === formData.name && m.recipient === privateMessageRecipient) ||
+                                                                    (m.sender === privateMessageRecipient && m.recipient === formData.name)
+                                                                )
+                                                                .map((message, index) => (
+                                                                    <div
+                                                                        key={index}
+                                                                        className={`message-item ${message.sender === formData.name ? 'bg-purple-50' : 'bg-gray-50'}`}
+                                                                    >
+                                                                        <div className="message-header">
+                                                                            <span className="message-sender">
+                                                                                {message.sender === formData.name ? 'You' : message.sender}
+                                                                            </span>
+                                                                            <span className="message-time">
+                                                                                {new Date(message.timestamp).toLocaleString()}
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="message-content">
+                                                                            {message.content}
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            {messages.filter(m =>
+                                                                (m.sender === formData.name && m.recipient === privateMessageRecipient) ||
+                                                                (m.sender === privateMessageRecipient && m.recipient === formData.name)
+                                                            ).length === 0 && (
+                                                                <div className="text-center py-8 text-gray-500">
+                                                                    <i className="fas fa-envelope text-2xl mb-2"></i>
+                                                                    <p>No messages yet with {privateMessageRecipient}.</p>
+                                                                </div>
+                                                            )}
+                                                        </>
+                                                    ) : (
+                                                        <div className="text-center py-8 text-gray-500">
+                                                            <i className="fas fa-user-friends text-2xl mb-2"></i>
+                                                            <p>Select a family member to see your conversation.</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {privateMessageRecipient && (
+                                                    <div className="flex flex-col">
+                                                        <div className="flex items-center mb-2">
+                                                            <div className="text-sm font-semibold mr-2">Messaging:</div>
+                                                            <div className="text-purple-600 font-medium">{privateMessageRecipient}</div>
+                                                        </div>
+
+                                                        <input
+                                                            type="text"
+                                                            id="private-message"
+                                                            name="privateMessage"
+                                                            value={formData.privateMessage}
+                                                            onChange={handleChange}
+                                                            className="form-input mb-2"
+                                                            placeholder={`Send a private message to ${privateMessageRecipient}...`}
+                                                        />
+
+                                                        {/* Emoji Picker */}
+                                                        <div className="emoji-picker mb-3 p-2 bg-gray-100 dark:bg-gray-800 rounded-lg overflow-x-auto whitespace-nowrap">
+                                                            {commonEmojis.map((emoji, index) => (
+                                                                <button
+                                                                    key={index}
+                                                                    onClick={() => addEmojiToPrivateMessage(emoji)}
+                                                                    className="emoji-btn inline-block mx-1 text-xl hover:transform hover:scale-125 transition-transform"
+                                                                    title={`Add ${emoji} emoji`}
+                                                                >
+                                                                    {emoji}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                onClick={handlePrivateMessageSubmit}
+                                                                className="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-lg flex-grow flex items-center justify-center"
+                                                            >
+                                                                <i className="fas fa-paper-plane mr-2"></i>
+                                                                Send Private Message
+                                                            </button>
+
+                                                            <button
+                                                                onClick={() => startListening('private')}
+                                                                className="bg-purple-600 hover:bg-purple-700 text-white rounded-lg p-3 flex items-center justify-center"
+                                                                title="Voice Input for Private Message"
+                                                            >
+                                                                <i className="fas fa-microphone"></i>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Video Chat Card */}
+                            <div className="family-card">
+                                <div className="card-header">
+                                    Video & Voice Chat
+                                </div>
+                                <div className="card-body">
+                                    {showVideoChat ? (
+                                        <div>
+                                            <div className="flex mb-2">
+                                                <div className="flex-1 mr-2">
+                                                    <div className="text-sm font-semibold mb-1">Your Camera</div>
+                                                    <div className="relative" style={{ height: '120px' }}>
+                                                        <video
+                                                            id="local-video"
+                                                            autoPlay
+                                                            muted
+                                                            playsInline
+                                                            className="w-full h-full object-cover rounded-lg"
+                                                        ></video>
+                                                    </div>
+                                                </div>
+                                                <div className="flex-1 ml-2">
+                                                    <div className="text-sm font-semibold mb-1">Remote Camera</div>
+                                                    <div className="relative" style={{ height: '120px' }}>
+                                                        <video
+                                                            id="remote-video"
+                                                            autoPlay
+                                                            playsInline
+                                                            className="w-full h-full object-cover rounded-lg bg-gray-200"
+                                                        ></video>
+                                                        {!isRemoteConnected && (
+                                                            <div className="absolute inset-0 flex items-center justify-center text-gray-500">
+                                                                <div className="text-center">
+                                                                    <i className="fas fa-user-slash text-2xl mb-2"></i>
+                                                                    <div className="text-xs">No one connected</div>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-2 mb-4">
+                                                <div className="text-center">
+                                                    <div className="text-sm font-semibold mb-1">Chat Type</div>
+                                                    <div className="flex">
+                                                        <button
+                                                            onClick={() => setChatType('group')}
+                                                            className={`flex-1 py-1 px-2 text-xs rounded-l-lg ${chatType === 'group'
+                                                                ? 'bg-purple-600 text-white'
+                                                                : 'bg-gray-200 text-gray-700'}`}
+                                                        >
+                                                            Group
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setChatType('private')}
+                                                            className={`flex-1 py-1 px-2 text-xs rounded-r-lg ${chatType === 'private'
+                                                                ? 'bg-purple-600 text-white'
+                                                                : 'bg-gray-200 text-gray-700'}`}
+                                                        >
+                                                            Private
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {chatType === 'private' && (
+                                                    <div>
+                                                        <div className="text-sm font-semibold mb-1">Select Member</div>
+                                                        <select
+                                                            className="form-input text-sm py-1 w-full"
+                                                            value={selectedMember}
+                                                            onChange={(e) => setSelectedMember(e.target.value)}
+                                                        >
+                                                            <option value="">-- Select --</option>
+                                                            {attendees.map((attendee, index) => (
+                                                                <option key={index} value={attendee.name}>
+                                                                    {attendee.name} ({attendee.location})
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="flex gap-2 mb-4">
+                                                <button
+                                                    onClick={toggleMicrophone}
+                                                    className={`flex-1 py-2 rounded-lg flex items-center justify-center ${isMicMuted
+                                                        ? 'bg-gray-300 text-gray-700'
+                                                        : 'bg-green-500 text-white'}`}
+                                                >
+                                                    <i className={`fas ${isMicMuted ? 'fa-microphone-slash' : 'fa-microphone'} mr-2`}></i>
+                                                    {isMicMuted ? 'Unmute' : 'Mute'}
+                                                </button>
+
+                                                <button
+                                                    onClick={toggleCamera}
+                                                    className={`flex-1 py-2 rounded-lg flex items-center justify-center ${isCameraOff
+                                                        ? 'bg-gray-300 text-gray-700'
+                                                        : 'bg-green-500 text-white'}`}
+                                                >
+                                                    <i className={`fas ${isCameraOff ? 'fa-video-slash' : 'fa-video'} mr-2`}></i>
+                                                    {isCameraOff ? 'Show Camera' : 'Hide Camera'}
+                                                </button>
+                                            </div>
+
+                                            {chatType === 'private' && (
+                                                <div className="mb-4">
+                                                    <div className="text-sm font-semibold mb-1">Push-to-Talk</div>
+                                                    <button
+                                                        onMouseDown={startPushToTalk}
+                                                        onMouseUp={stopPushToTalk}
+                                                        onMouseLeave={stopPushToTalk}
+                                                        onTouchStart={startPushToTalk}
+                                                        onTouchEnd={stopPushToTalk}
+                                                        className="bg-yellow-500 hover:bg-yellow-600 text-white py-3 px-4 rounded-lg w-full flex items-center justify-center"
+                                                    >
+                                                        <i className="fas fa-bullhorn mr-2"></i>
+                                                        Press & Hold to Talk
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            <button
+                                                onClick={stopVideoChat}
+                                                className="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg w-full"
+                                            >
+                                                End Chat Session
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-6">
+                                            <p className="mb-4">Connect with family members</p>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <button
+                                                    onClick={() => startVideoChat('group')}
+                                                    className="bg-purple-600 hover:bg-purple-700 text-white py-3 px-4 rounded-lg flex flex-col items-center"
+                                                >
+                                                    <i className="fas fa-users text-2xl mb-2"></i>
+                                                    Group Video Chat
+                                                </button>
+
+                                                <button
+                                                    onClick={() => startVideoChat('private')}
+                                                    className="bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-4 rounded-lg flex flex-col items-center"
+                                                >
+                                                    <i className="fas fa-user-friends text-2xl mb-2"></i>
+                                                    Private Video Chat
+                                                </button>
+
+                                                <button
+                                                    onClick={() => startVideoChat('audio')}
+                                                    className="bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg flex flex-col items-center"
+                                                >
+                                                    <i className="fas fa-phone-alt text-2xl mb-2"></i>
+                                                    Voice Only Chat
+                                                </button>
+
+                                                <button
+                                                    onClick={() => startVideoChat('cb')}
+                                                    className="bg-yellow-600 hover:bg-yellow-700 text-white py-3 px-4 rounded-lg flex flex-col items-center"
+                                                >
+                                                    <i className="fas fa-bullhorn text-2xl mb-2"></i>
+                                                    CB-Style Talk
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Second Row: RSVP List and Suggestions */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            {/* RSVP List Card */}
+                            <div className="family-card">
+                                <div className="card-header flex justify-between items-center">
+                                    <span>RSVP List</span>
+                                    {isAdmin && (
+                                        <button
+                                            onClick={clearAttendeeList}
+                                            className="bg-red-500 hover:bg-red-600 text-white text-xs py-1 px-2 rounded"
+                                            title="Admin: Clear RSVP List"
+                                        >
+                                            <i className="fas fa-trash-alt mr-1"></i> Clear List
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="card-body">
+                                    <div className="mb-4">
+                                        <div className="text-lg font-semibold mb-2">Total Attendees: {attendees.reduce((sum, a) => sum + a.people, 0)}</div>
+                                        <div className="text-sm text-gray-600 mb-4">From {[...new Set(attendees.map(a => a.location))].filter(Boolean).length} different locations</div>
+                                    </div>
+
+                                    <div className="overflow-y-auto" style={{ maxHeight: "300px" }}>
+                                        {attendees.length === 0 ? (
+                                            <p className="text-gray-500 italic">No one has RSVP'd yet.</p>
+                                        ) : (
+                                            <ul className="divide-y divide-gray-200">
+                                                {attendees.map((attendee, index) => (
+                                                    <li key={index} className="py-3">
+                                                        <div className="font-medium">{attendee.name}</div>
+                                                        <div className="text-sm text-gray-600">
+                                                            {attendee.people} {attendee.people === 1 ? 'person' : 'people'} from {attendee.location}
+                                                        </div>
+                                                        <div className="text-xs text-gray-500">
+                                                            {new Date(attendee.timestamp).toLocaleDateString()}
+                                                        </div>
+                                                        {isAdmin && (
+                                                            <button
+                                                                onClick={() => removeAttendee(attendee.id)}
+                                                                className="text-red-500 hover:text-red-700 text-xs mt-1"
+                                                                title="Remove this attendee"
+                                                            >
+                                                                <i className="fas fa-times mr-1"></i> Remove
+                                                            </button>
+                                                        )}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Suggestions Card with Activity Popularity */}
+                            <div className="family-card">
+                                <div className="card-header">
+                                    Activity Suggestions
+                                </div>
+                                <div className="card-body">
+                                    {/* Activity Popularity Section */}
+                                    <div className="mb-6">
+                                        <h3 className="text-lg font-semibold mb-3">Activity Popularity</h3>
+                                        <div className="text-sm text-gray-600 mb-2">Total votes: {activities.reduce((sum, a) => sum + a.votes, 0)}</div>
+
+                                        {activities
+                                            .sort((a, b) => b.votes - a.votes)
+                                            .slice(0, 5)
+                                            .map((activity, index) => {
+                                                const maxVotes = Math.max(...activities.map(a => a.votes));
+                                                const percentage = maxVotes > 0 ? (activity.votes / maxVotes) * 100 : 0;
+
+                                                return (
+                                                    <div key={activity.id} className="tally-item">
+                                                        <div className="tally-name">{activity.title}</div>
+                                                        <div className="tally-bar-container">
+                                                            <div
+                                                                className="tally-bar"
+                                                                style={{ width: `${percentage}%` }}
+                                                            ></div>
+                                                        </div>
+                                                        <div className="tally-count">{activity.votes}</div>
+                                                    </div>
+                                                );
+                                            })
+                                        }
+                                    </div>
+
+                                    {/* Activity List Section */}
+                                    <h3 className="text-lg font-semibold mb-3">All Activities</h3>
+                                    <ul className="suggestion-list mb-4 max-h-40 overflow-y-auto">
+                                        {activities.map(activity => (
+                                            <li key={activity.id} className="flex justify-between items-center py-1">
+                                                <div className="flex-grow">
+                                                    <span>{activity.title}</span>
+                                                    <span className="text-xs text-gray-500 ml-2">
+                                                        by {activity.submitter || 'Anonymous'}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center">
+                                                    <span className="text-xs text-gray-500 mr-2">
+                                                        {activity.votes} {activity.votes === 1 ? 'vote' : 'votes'}
+                                                    </span>
+                                                    <button
+                                                        onClick={() => handleVote('activity', activity.id)}
+                                                        className="text-purple-600 hover:text-purple-800 text-xs"
+                                                        title="Vote for this activity"
+                                                    >
+                                                        <i className="fas fa-thumbs-up"></i>
+                                                    </button>
+                                                    {isAdmin && (
+                                                        <button
+                                                            onClick={() => removeActivity(activity.id)}
+                                                            className="text-red-500 hover:text-red-700 text-xs ml-2"
+                                                            title="Remove this activity"
+                                                        >
+                                                            <i className="fas fa-times"></i>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </li>
+                                        ))}
+                                    </ul>
+
+                                    {/* Add New Activity Section */}
+                                    <div className="mt-4">
+                                        <label className="block text-gray-700 mb-2" htmlFor="activity-dropdown">
+                                            Select or add a new activity:
+                                        </label>
+
+                                        {/* Activity Dropdown */}
+                                        <div className="mb-3">
+                                            <div className="flex gap-2">
+                                                <select
+                                                    id="activity-dropdown"
+                                                    className="form-input flex-grow"
+                                                    onChange={(e) => {
+                                                        const selectedIndex = e.target.value;
+                                                        if (selectedIndex !== "") {
+                                                            // Get the selected activity
+                                                            const activity = activitySuggestions[parseInt(selectedIndex)];
+                                                            if (activity) {
+                                                                handleActivitySelect(activity);
+                                                            }
+                                                        } else {
+                                                            // Clear the form if "Select an activity" is chosen
+                                                            setFormData(prev => ({ ...prev, activity: '', activityDesc: '' }));
+                                                        }
+                                                    }}
+                                                >
+                                                    <option value="">-- Select an activity --</option>
+                                                    <optgroup label="Backyard Games">
+                                                        {activitySuggestions
+                                                            .filter(a => a.category === "Backyard Games")
+                                                            .map((activity, index) => (
+                                                                <option key={index} value={index}>
+                                                                    {activity.name}
+                                                                </option>
+                                                            ))
+                                                        }
+                                                    </optgroup>
+                                                    <optgroup label="Board & Card Games">
+                                                        {activitySuggestions
+                                                            .filter(a => a.category === "Board & Card Games")
+                                                            .map((activity, index) => (
+                                                                <option key={index + 10} value={index + 10}>
+                                                                    {activity.name}
+                                                                </option>
+                                                            ))
+                                                        }
+                                                    </optgroup>
+                                                </select>
+                                                <button
+                                                    onClick={() => {
+                                                        // Clear the activity input
+                                                        setFormData(prev => ({ ...prev, activity: '', activityDesc: '' }));
+                                                        // Reset dropdown
+                                                        document.getElementById('activity-dropdown').value = '';
+                                                        // Show notification
+                                                        showNotification('Selection cleared', 'info');
+                                                    }}
+                                                    className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg px-3"
+                                                    title="Clear selection"
+                                                    type="button"
+                                                >
+                                                    <i className="fas fa-times"></i>
+                                                </button>
+                                            </div>
+                                            <div className="text-xs text-gray-500 mt-1">
+                                                Select an activity from the list or type your own below
+                                            </div>
+                                        </div>
+
+                                        {/* Custom Activity Input */}
+                                        <div className="flex gap-2">
+                                            <div className="relative flex-grow">
+                                                <input
+                                                    type="text"
+                                                    id="add-suggestion"
+                                                    name="activity"
+                                                    value={formData.activity}
+                                                    onChange={handleChange}
+                                                    className="form-input w-full pr-10"
+                                                    placeholder="Or type your own activity..."
+                                                />
+                                                {formData.activity && (
+                                                    <button
+                                                        onClick={() => {
+                                                            // Clear the activity input
+                                                            setFormData(prev => ({ ...prev, activity: '', activityDesc: '' }));
+                                                            // Reset dropdown
+                                                            document.getElementById('activity-dropdown').value = '';
+                                                            // Focus back on the input
+                                                            document.getElementById('add-suggestion').focus();
+                                                        }}
+                                                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-red-500"
+                                                        title="Clear selection"
+                                                        type="button"
+                                                    >
+                                                        <i className="fas fa-times"></i>
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <button
+                                                onClick={handleActivitySubmit}
+                                                className="bg-purple-600 hover:bg-purple-700 text-white rounded-lg px-4 py-2"
+                                            >
+                                                Add
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+
+                        {/* SMS Notification Info */}
+                        <div className="mt-8 text-center text-sm text-gray-500">
+                            <p>Admin notifications will be sent to: (414) 367-6211</p>
+                        </div>
+
+                        {/* Stop Speaking Button */}
+                        {isSpeaking && (
+                            <div className="fixed bottom-5 right-5 z-50">
+                                <button
+                                    onClick={stopSpeaking}
+                                    className="bg-red-500 hover:bg-red-600 text-white rounded-full p-3 w-12 h-12 flex items-center justify-center shadow-lg"
+                                    title="Stop Talking"
+                                >
+                                    <i className="fas fa-stop"></i>
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Speech Output Display */}
+                        {speechOutput && (
+                            <div className="fixed bottom-5 left-5 z-50 bg-white p-3 rounded-lg shadow-lg max-w-xs">
+                                <div className="text-sm font-medium">Voice Input:</div>
+                                <div className="text-gray-700">{speechOutput}</div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // Render the app
+        ReactDOM.render(<App />, document.getElementById('app'));
+    </script>
+    <!-- 🧠 END REGION: AI & MAIN APP CODE -->
+</body>
+</html>
