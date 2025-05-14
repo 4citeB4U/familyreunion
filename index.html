@@ -504,25 +504,620 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.21.4/babel.min.js"></script>
 
-    <!-- Dexie.js for IndexedDB -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dexie/3.2.3/dexie.min.js"></script>
+    <!-- WebRTC adapter for cross-browser compatibility -->
+    <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
 
-    <!-- Twilio SDK for SMS notifications -->
-    <script src="https://media.twiliocdn.com/sdk/js/client/v1.14/twilio.min.js"></script>
+    <!-- Axios for HTTP requests -->
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 
     <!-- 🧠 REGION: AI & MAIN APP CODE -->
     <script type="text/babel">
-        // Create the main database
-        const db = new Dexie('HallFamilyReunionDB');
+        // Local Storage Database System
+        const LocalDB = {
+            // Initialize collections
+            init: () => {
+                if (!localStorage.getItem('attendees')) localStorage.setItem('attendees', JSON.stringify([]));
+                if (!localStorage.getItem('messages')) localStorage.setItem('messages', JSON.stringify([]));
+                if (!localStorage.getItem('activities')) localStorage.setItem('activities', JSON.stringify([]));
+                if (!localStorage.getItem('foods')) localStorage.setItem('foods', JSON.stringify([]));
+                if (!localStorage.getItem('users')) localStorage.setItem('users', JSON.stringify([]));
+                if (!localStorage.getItem('calls')) localStorage.setItem('calls', JSON.stringify([]));
+            },
 
-        // Define database schema
-        db.version(1).stores({
-            attendees: '++id, name, people, location, attending, timestamp',
-            messages: '++id, sender, content, timestamp',
-            activities: '++id, title, description, votes, submitter, timestamp',
-            foods: '++id, title, description, votes, submitter, timestamp'
-        });
+            // Get all items from a collection
+            getAll: (collection) => {
+                const data = localStorage.getItem(collection);
+                return data ? JSON.parse(data) : [];
+            },
+
+            // Add an item to a collection
+            add: (collection, item) => {
+                const data = LocalDB.getAll(collection);
+                const id = 'id_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                const newItem = { ...item, id };
+                data.push(newItem);
+                localStorage.setItem(collection, JSON.stringify(data));
+                return newItem;
+            },
+
+            // Update an item in a collection
+            update: (collection, id, updates) => {
+                const data = LocalDB.getAll(collection);
+                const index = data.findIndex(item => item.id === id);
+                if (index !== -1) {
+                    data[index] = { ...data[index], ...updates };
+                    localStorage.setItem(collection, JSON.stringify(data));
+                    return data[index];
+                }
+                return null;
+            },
+
+            // Delete an item from a collection
+            delete: (collection, id) => {
+                const data = LocalDB.getAll(collection);
+                const filtered = data.filter(item => item.id !== id);
+                localStorage.setItem(collection, JSON.stringify(filtered));
+                return true;
+            },
+
+            // Clear a collection
+            clear: (collection) => {
+                localStorage.setItem(collection, JSON.stringify([]));
+                return true;
+            },
+
+            // Query items in a collection
+            query: (collection, field, operator, value) => {
+                const data = LocalDB.getAll(collection);
+                let results = [];
+
+                switch (operator) {
+                    case '==':
+                        results = data.filter(item => item[field] === value);
+                        break;
+                    case '!=':
+                        results = data.filter(item => item[field] !== value);
+                        break;
+                    case '>':
+                        results = data.filter(item => item[field] > value);
+                        break;
+                    case '>=':
+                        results = data.filter(item => item[field] >= value);
+                        break;
+                    case '<':
+                        results = data.filter(item => item[field] < value);
+                        break;
+                    case '<=':
+                        results = data.filter(item => item[field] <= value);
+                        break;
+                    case 'contains':
+                        results = data.filter(item =>
+                            Array.isArray(item[field]) && item[field].includes(value)
+                        );
+                        break;
+                    default:
+                        results = data;
+                }
+
+                return results;
+            }
+        };
+
+        // Initialize local database
+        LocalDB.init();
+
+        // Collection references (simulating Firebase collections)
+        const attendeesCollection = {
+            add: (data) => LocalDB.add('attendees', data),
+            get: () => ({
+                docs: LocalDB.getAll('attendees').map(doc => ({
+                    id: doc.id,
+                    data: () => doc
+                })),
+                empty: LocalDB.getAll('attendees').length === 0
+            }),
+            doc: (id) => ({
+                get: () => {
+                    const doc = LocalDB.getAll('attendees').find(item => item.id === id);
+                    return {
+                        exists: !!doc,
+                        data: () => doc,
+                        id
+                    };
+                },
+                delete: () => LocalDB.delete('attendees', id),
+                update: (data) => LocalDB.update('attendees', id, data)
+            }),
+            where: (field, operator, value) => {
+                // Store the current query criteria
+                const criteria = [{ field, operator, value }];
+
+                // Create a query object that can be chained
+                const queryObj = {
+                    where: (field, operator, value) => {
+                        // Add additional criteria
+                        criteria.push({ field, operator, value });
+                        return queryObj;
+                    },
+                    get: () => {
+                        // Start with all attendees
+                        let results = LocalDB.getAll('attendees');
+
+                        // Apply each criteria in sequence
+                        criteria.forEach(({ field, operator, value }) => {
+                            results = results.filter(doc => {
+                                switch (operator) {
+                                    case '==':
+                                        return doc[field] === value;
+                                    case '!=':
+                                        return doc[field] !== value;
+                                    case '>':
+                                        return doc[field] > value;
+                                    case '>=':
+                                        return doc[field] >= value;
+                                    case '<':
+                                        return doc[field] < value;
+                                    case '<=':
+                                        return doc[field] <= value;
+                                    case 'contains':
+                                        return Array.isArray(doc[field]) && doc[field].includes(value);
+                                    default:
+                                        return true;
+                                }
+                            });
+                        });
+
+                        return {
+                            empty: results.length === 0,
+                            docs: results.map(doc => ({
+                                id: doc.id,
+                                data: () => doc
+                            }))
+                        };
+                    }
+                };
+
+                return queryObj;
+            },
+            onSnapshot: (callback) => {
+                // Simulate real-time updates by returning current data
+                const handleStorageChange = () => {
+                    const snapshot = {
+                        docs: LocalDB.getAll('attendees').map(doc => ({
+                            id: doc.id,
+                            data: () => doc
+                        }))
+                    };
+                    callback(snapshot);
+                };
+
+                // Call immediately with current data
+                handleStorageChange();
+
+                // Listen for storage events (won't work in same tab, but simulates the concept)
+                window.addEventListener('storage', handleStorageChange);
+
+                // Return unsubscribe function
+                return () => window.removeEventListener('storage', handleStorageChange);
+            }
+        };
+
+        const messagesCollection = {
+            add: (data) => LocalDB.add('messages', data),
+            get: () => ({
+                docs: LocalDB.getAll('messages').map(doc => ({
+                    id: doc.id,
+                    data: () => doc
+                })),
+                empty: LocalDB.getAll('messages').length === 0
+            }),
+            doc: (id) => ({
+                get: () => {
+                    const doc = LocalDB.getAll('messages').find(item => item.id === id);
+                    return {
+                        exists: !!doc,
+                        data: () => doc,
+                        id
+                    };
+                },
+                delete: () => LocalDB.delete('messages', id),
+                update: (data) => LocalDB.update('messages', id, data)
+            }),
+            where: (field, operator, value) => {
+                // Store the current query criteria
+                const criteria = [{ field, operator, value }];
+
+                // Create a query object that can be chained
+                const queryObj = {
+                    where: (field, operator, value) => {
+                        // Add additional criteria
+                        criteria.push({ field, operator, value });
+                        return queryObj;
+                    },
+                    get: () => {
+                        // Start with all messages
+                        let results = LocalDB.getAll('messages');
+
+                        // Apply each criteria in sequence
+                        criteria.forEach(({ field, operator, value }) => {
+                            results = results.filter(doc => {
+                                switch (operator) {
+                                    case '==':
+                                        return doc[field] === value;
+                                    case '!=':
+                                        return doc[field] !== value;
+                                    case '>':
+                                        return doc[field] > value;
+                                    case '>=':
+                                        return doc[field] >= value;
+                                    case '<':
+                                        return doc[field] < value;
+                                    case '<=':
+                                        return doc[field] <= value;
+                                    case 'contains':
+                                        return Array.isArray(doc[field]) && doc[field].includes(value);
+                                    default:
+                                        return true;
+                                }
+                            });
+                        });
+
+                        return {
+                            empty: results.length === 0,
+                            docs: results.map(doc => ({
+                                id: doc.id,
+                                data: () => doc
+                            }))
+                        };
+                    }
+                };
+
+                return queryObj;
+            },
+            orderBy: () => ({
+                onSnapshot: (callback) => {
+                    // Simulate real-time updates by returning current data
+                    const handleStorageChange = () => {
+                        const snapshot = {
+                            docs: LocalDB.getAll('messages').map(doc => ({
+                                id: doc.id,
+                                data: () => doc
+                            }))
+                        };
+                        callback(snapshot);
+                    };
+
+                    // Call immediately with current data
+                    handleStorageChange();
+
+                    // Listen for storage events (won't work in same tab, but simulates the concept)
+                    window.addEventListener('storage', handleStorageChange);
+
+                    // Return unsubscribe function
+                    return () => window.removeEventListener('storage', handleStorageChange);
+                }
+            }),
+            onSnapshot: (callback) => {
+                // Simulate real-time updates by returning current data
+                const handleStorageChange = () => {
+                    const snapshot = {
+                        docs: LocalDB.getAll('messages').map(doc => ({
+                            id: doc.id,
+                            data: () => doc
+                        }))
+                    };
+                    callback(snapshot);
+                };
+
+                // Call immediately with current data
+                handleStorageChange();
+
+                // Listen for storage events (won't work in same tab, but simulates the concept)
+                window.addEventListener('storage', handleStorageChange);
+
+                // Return unsubscribe function
+                return () => window.removeEventListener('storage', handleStorageChange);
+            }
+        };
+
+        const activitiesCollection = {
+            add: (data) => LocalDB.add('activities', data),
+            get: () => ({
+                docs: LocalDB.getAll('activities').map(doc => ({
+                    id: doc.id,
+                    data: () => doc
+                })),
+                empty: LocalDB.getAll('activities').length === 0
+            }),
+            doc: (id) => ({
+                get: () => {
+                    const doc = LocalDB.getAll('activities').find(item => item.id === id);
+                    return {
+                        exists: !!doc,
+                        data: () => doc,
+                        id
+                    };
+                },
+                delete: () => LocalDB.delete('activities', id),
+                update: (data) => LocalDB.update('activities', id, data)
+            }),
+            where: (field, operator, value) => {
+                // Store the current query criteria
+                const criteria = [{ field, operator, value }];
+
+                // Create a query object that can be chained
+                const queryObj = {
+                    where: (field, operator, value) => {
+                        // Add additional criteria
+                        criteria.push({ field, operator, value });
+                        return queryObj;
+                    },
+                    get: () => {
+                        // Start with all activities
+                        let results = LocalDB.getAll('activities');
+
+                        // Apply each criteria in sequence
+                        criteria.forEach(({ field, operator, value }) => {
+                            results = results.filter(doc => {
+                                switch (operator) {
+                                    case '==':
+                                        return doc[field] === value;
+                                    case '!=':
+                                        return doc[field] !== value;
+                                    case '>':
+                                        return doc[field] > value;
+                                    case '>=':
+                                        return doc[field] >= value;
+                                    case '<':
+                                        return doc[field] < value;
+                                    case '<=':
+                                        return doc[field] <= value;
+                                    case 'contains':
+                                        return Array.isArray(doc[field]) && doc[field].includes(value);
+                                    default:
+                                        return true;
+                                }
+                            });
+                        });
+
+                        return {
+                            empty: results.length === 0,
+                            docs: results.map(doc => ({
+                                id: doc.id,
+                                data: () => doc
+                            }))
+                        };
+                    }
+                };
+
+                return queryObj;
+            },
+            onSnapshot: (callback) => {
+                // Simulate real-time updates by returning current data
+                const handleStorageChange = () => {
+                    const snapshot = {
+                        docs: LocalDB.getAll('activities').map(doc => ({
+                            id: doc.id,
+                            data: () => doc
+                        }))
+                    };
+                    callback(snapshot);
+                };
+
+                // Call immediately with current data
+                handleStorageChange();
+
+                // Listen for storage events (won't work in same tab, but simulates the concept)
+                window.addEventListener('storage', handleStorageChange);
+
+                // Return unsubscribe function
+                return () => window.removeEventListener('storage', handleStorageChange);
+            }
+        };
+
+        const foodsCollection = {
+            add: (data) => LocalDB.add('foods', data),
+            get: () => ({
+                docs: LocalDB.getAll('foods').map(doc => ({
+                    id: doc.id,
+                    data: () => doc
+                })),
+                empty: LocalDB.getAll('foods').length === 0
+            }),
+            doc: (id) => ({
+                get: () => {
+                    const doc = LocalDB.getAll('foods').find(item => item.id === id);
+                    return {
+                        exists: !!doc,
+                        data: () => doc,
+                        id
+                    };
+                },
+                delete: () => LocalDB.delete('foods', id),
+                update: (data) => LocalDB.update('foods', id, data)
+            }),
+            where: (field, operator, value) => {
+                // Store the current query criteria
+                const criteria = [{ field, operator, value }];
+
+                // Create a query object that can be chained
+                const queryObj = {
+                    where: (field, operator, value) => {
+                        // Add additional criteria
+                        criteria.push({ field, operator, value });
+                        return queryObj;
+                    },
+                    get: () => {
+                        // Start with all foods
+                        let results = LocalDB.getAll('foods');
+
+                        // Apply each criteria in sequence
+                        criteria.forEach(({ field, operator, value }) => {
+                            results = results.filter(doc => {
+                                switch (operator) {
+                                    case '==':
+                                        return doc[field] === value;
+                                    case '!=':
+                                        return doc[field] !== value;
+                                    case '>':
+                                        return doc[field] > value;
+                                    case '>=':
+                                        return doc[field] >= value;
+                                    case '<':
+                                        return doc[field] < value;
+                                    case '<=':
+                                        return doc[field] <= value;
+                                    case 'contains':
+                                        return Array.isArray(doc[field]) && doc[field].includes(value);
+                                    default:
+                                        return true;
+                                }
+                            });
+                        });
+
+                        return {
+                            empty: results.length === 0,
+                            docs: results.map(doc => ({
+                                id: doc.id,
+                                data: () => doc
+                            }))
+                        };
+                    }
+                };
+
+                return queryObj;
+            },
+            onSnapshot: (callback) => {
+                // Simulate real-time updates by returning current data
+                const handleStorageChange = () => {
+                    const snapshot = {
+                        docs: LocalDB.getAll('foods').map(doc => ({
+                            id: doc.id,
+                            data: () => doc
+                        }))
+                    };
+                    callback(snapshot);
+                };
+
+                // Call immediately with current data
+                handleStorageChange();
+
+                // Listen for storage events (won't work in same tab, but simulates the concept)
+                window.addEventListener('storage', handleStorageChange);
+
+                // Return unsubscribe function
+                return () => window.removeEventListener('storage', handleStorageChange);
+            }
+        };
+
+        // Helper function to create a timestamp (replacing Firebase's serverTimestamp)
+        const serverTimestamp = () => new Date().toISOString();
+
+        // Mock Firebase objects
+        const firebase = {
+            firestore: {
+                FieldValue: {
+                    serverTimestamp: serverTimestamp
+                },
+                batch: () => {
+                    const items = [];
+                    return {
+                        delete: (ref) => {
+                            items.push({ type: 'delete', ref });
+                        },
+                        update: (ref, data) => {
+                            items.push({ type: 'update', ref, data });
+                        },
+                        set: (ref, data) => {
+                            items.push({ type: 'set', ref, data });
+                        },
+                        commit: async () => {
+                            for (const item of items) {
+                                if (item.type === 'delete') {
+                                    if (item.ref.delete) {
+                                        await item.ref.delete();
+                                    }
+                                } else if (item.type === 'update') {
+                                    if (item.ref.update) {
+                                        await item.ref.update(item.data);
+                                    }
+                                } else if (item.type === 'set') {
+                                    if (item.ref.set) {
+                                        await item.ref.set(item.data);
+                                    }
+                                }
+                            }
+                            return true;
+                        }
+                    };
+                },
+                runTransaction: async (callback) => {
+                    // Simple mock for transactions
+                    return await callback({
+                        get: async (ref) => {
+                            const result = await ref.get();
+                            return result;
+                        },
+                        update: async (ref, data) => {
+                            await ref.update(data);
+                            return true;
+                        }
+                    });
+                }
+            },
+            auth: () => ({
+                currentUser: getCurrentUser(),
+                signInAnonymously: () => Promise.resolve({ user: getCurrentUser() }),
+                signOut: () => {
+                    localStorage.removeItem('fakeUser');
+                    return Promise.resolve();
+                }
+            }),
+            database: () => ({
+                ref: (path) => ({
+                    set: (data) => {
+                        const parts = path.split('/');
+                        const collection = parts[0];
+                        const existingData = LocalDB.getAll(collection) || [];
+                        existingData.push(data);
+                        localStorage.setItem(collection, JSON.stringify(existingData));
+                        return Promise.resolve();
+                    },
+                    update: (data) => {
+                        const parts = path.split('/');
+                        const collection = parts[0];
+                        const id = parts[1];
+                        const existingData = LocalDB.getAll(collection) || [];
+                        const index = existingData.findIndex(item => item.id === id);
+                        if (index !== -1) {
+                            existingData[index] = { ...existingData[index], ...data };
+                            localStorage.setItem(collection, JSON.stringify(existingData));
+                        }
+                        return Promise.resolve();
+                    },
+                    push: (data) => {
+                        const parts = path.split('/');
+                        const collection = parts[0];
+                        const newItem = LocalDB.add(collection, data);
+                        return Promise.resolve({ key: newItem.id });
+                    },
+                    on: (event, callback) => {
+                        // Simulate real-time updates
+                        callback();
+                        return () => {}; // Unsubscribe function
+                    },
+                    off: () => {}
+                })
+            })
+        };
+
+        // WebRTC configuration
+        const peerConnectionConfig = {
+            'iceServers': [
+                { 'urls': 'stun:stun.stunprotocol.org:3478' },
+                { 'urls': 'stun:stun.l.google.com:19302' },
+            ]
+        };
 
         // Add function to send SMS notification
         const sendSMSNotification = async (message) => {
@@ -793,24 +1388,130 @@
             }
         };
 
+        // User authentication functions
+        const signInAnonymously = async (userName) => {
+            try {
+                // For testing purposes, create a "fake" authenticated user
+                // This avoids the need for Firebase Authentication
+                const fakeUser = {
+                    uid: 'user_' + new Date().getTime(),
+                    displayName: userName,
+                    isAnonymous: true
+                };
+
+                // Store the user in localStorage for persistence
+                localStorage.setItem('fakeUser', JSON.stringify(fakeUser));
+
+                // Add user to users collection in localStorage
+                const users = LocalDB.getAll('users');
+                users.push({
+                    id: fakeUser.uid,
+                    name: userName,
+                    lastActive: new Date().toISOString(),
+                    isOnline: true
+                });
+                localStorage.setItem('users', JSON.stringify(users));
+
+                return fakeUser;
+            } catch (error) {
+                console.error('Error with fake sign in:', error);
+                return null;
+            }
+        };
+
+        // Set user status when they connect/disconnect
+        const setUserStatus = (isOnline) => {
+            // Get the fake user from localStorage
+            const fakeUserStr = localStorage.getItem('fakeUser');
+            if (fakeUserStr) {
+                try {
+                    const fakeUser = JSON.parse(fakeUserStr);
+
+                    // Update user status in localStorage
+                    const users = LocalDB.getAll('users');
+                    const userIndex = users.findIndex(u => u.id === fakeUser.uid);
+
+                    if (userIndex !== -1) {
+                        users[userIndex].isOnline = isOnline;
+                        users[userIndex].lastActive = new Date().toISOString();
+                        localStorage.setItem('users', JSON.stringify(users));
+                    }
+                } catch (error) {
+                    console.error('Error parsing fake user:', error);
+                }
+            }
+        };
+
+        // Helper function to get the current user
+        const getCurrentUser = () => {
+            // Try to get from localStorage
+            const fakeUserStr = localStorage.getItem('fakeUser');
+            if (fakeUserStr) {
+                try {
+                    return JSON.parse(fakeUserStr);
+                } catch (error) {
+                    console.error('Error parsing fake user:', error);
+                }
+            }
+            return null;
+        };
+
+        // WebRTC connection handling
+        let localPeerConnection = null;
+        let localStream = null;
+
+        // Setup WebRTC peer connection
+        const setupPeerConnection = (userId) => {
+            // Create a new RTCPeerConnection
+            localPeerConnection = new RTCPeerConnection(peerConnectionConfig);
+
+            // Add local stream tracks to the connection
+            if (localStream) {
+                localStream.getTracks().forEach(track => {
+                    localPeerConnection.addTrack(track, localStream);
+                });
+            }
+
+            // Handle ICE candidates
+            localPeerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    // Send the ICE candidate to the remote peer via Firebase
+                    const currentUser = firebase.auth().currentUser;
+                    if (currentUser) {
+                        rtcDb.ref(`calls/${userId}/candidates/${currentUser.uid}`).push({
+                            candidate: event.candidate.toJSON(),
+                            timestamp: firebase.database.ServerValue.TIMESTAMP
+                        });
+                    }
+                }
+            };
+
+            // Handle remote stream
+            localPeerConnection.ontrack = (event) => {
+                const remoteVideo = document.getElementById('remote-video');
+                if (remoteVideo && event.streams && event.streams[0]) {
+                    remoteVideo.srcObject = event.streams[0];
+                }
+            };
+
+            return localPeerConnection;
+        };
+
         // Main React Components
         function App() {
             const [attendees, setAttendees] = React.useState([]);
             const [messages, setMessages] = React.useState([]);
-            const [activities, setActivities] = React.useState([
-                { id: 1, title: 'Potluck dinner', votes: 5 },
-                { id: 2, title: 'Outdoor games', votes: 3 },
-                { id: 3, title: 'Talent show', votes: 4 },
-                { id: 4, title: 'Family trivia', votes: 7 }
-            ]);
+            const [activities, setActivities] = React.useState([]);
             const [foods, setFoods] = React.useState([]);
-            const [isAdmin, setIsAdmin] = React.useState(true); // Default to admin for demo
+            const [isAdmin, setIsAdmin] = React.useState(false);
             const [notification, setNotification] = React.useState(null);
             const [activeBalloons, setActiveBalloons] = React.useState([]);
             const [currentAgent, setCurrentAgent] = React.useState(AgentLee);
             const [isSpeaking, setIsSpeaking] = React.useState(false);
             const [speechOutput, setSpeechOutput] = React.useState('');
             const [darkMode, setDarkMode] = React.useState(false); // Dark mode state
+            const [user, setUser] = React.useState(null); // Current user
+            const [isAuthenticated, setIsAuthenticated] = React.useState(false); // Authentication state
             // Video chat states
             const [showVideoChat, setShowVideoChat] = React.useState(false);
             const [localStream, setLocalStream] = React.useState(null);
@@ -927,23 +1628,70 @@
                 ]);
             }, []);
 
-            // Load data from IndexedDB
+            // Load data from localStorage
             const loadData = async () => {
                 try {
-                    const attendeeData = await db.attendees.toArray();
+                    // Load initial data from localStorage
+
+                    // Load attendees
+                    const attendeeData = LocalDB.getAll('attendees');
                     setAttendees(attendeeData);
 
-                    const messageData = await db.messages.toArray();
+                    // Load messages
+                    const messageData = LocalDB.getAll('messages');
+                    // Sort messages by timestamp if available
+                    messageData.sort((a, b) => {
+                        if (!a.timestamp) return -1;
+                        if (!b.timestamp) return 1;
+                        return new Date(a.timestamp) - new Date(b.timestamp);
+                    });
                     setMessages(messageData);
 
-                    const activityData = await db.activities.toArray();
+                    // Scroll to bottom of message board if it exists
+                    const messageBoard = document.querySelector('.message-board');
+                    if (messageBoard) {
+                        messageBoard.scrollTop = messageBoard.scrollHeight;
+                    }
+
+                    // Load activities
+                    const activityData = LocalDB.getAll('activities');
                     setActivities(activityData);
 
-                    const foodData = await db.foods.toArray();
+                    // Load foods
+                    const foodData = LocalDB.getAll('foods');
                     setFoods(foodData);
+
+                    // Set up storage event listener to update data when localStorage changes
+                    const handleStorageChange = (e) => {
+                        if (e.key === 'attendees') {
+                            setAttendees(JSON.parse(e.newValue || '[]'));
+                        } else if (e.key === 'messages') {
+                            const newMessages = JSON.parse(e.newValue || '[]');
+                            setMessages(newMessages);
+
+                            // Scroll to bottom of message board if it exists
+                            const messageBoard = document.querySelector('.message-board');
+                            if (messageBoard) {
+                                messageBoard.scrollTop = messageBoard.scrollHeight;
+                            }
+                        } else if (e.key === 'activities') {
+                            setActivities(JSON.parse(e.newValue || '[]'));
+                        } else if (e.key === 'foods') {
+                            setFoods(JSON.parse(e.newValue || '[]'));
+                        }
+                    };
+
+                    // Add storage event listener
+                    window.addEventListener('storage', handleStorageChange);
+
+                    // Clean up listener on unmount
+                    return () => {
+                        window.removeEventListener('storage', handleStorageChange);
+                    };
+
                 } catch (error) {
-                    console.error('Error loading data:', error);
-                    showNotification('Error loading data from database', 'error');
+                    console.error('Error loading data from localStorage:', error);
+                    showNotification('Error loading data', 'error');
                 }
             };
 
@@ -957,31 +1705,53 @@
             const handleAttendSubmit = async (e) => {
                 e.preventDefault();
 
+                // Check if user is authenticated
+                if (!isAuthenticated) {
+                    // Sign in anonymously with the name from the form
+                    const name = formData.name.trim();
+                    if (!name) {
+                        showNotification('Please enter your name to register', 'error');
+                        return;
+                    }
+
+                    const user = await signInAnonymously(name);
+                    if (!user) {
+                        showNotification('Error signing in. Please try again.', 'error');
+                        return;
+                    }
+
+                    setUser(user);
+                    setIsAuthenticated(true);
+                    showNotification(`Welcome, ${name}!`, 'success');
+                }
+
                 try {
                     const name = formData.name.trim();
                     const location = formData.location.trim();
 
                     // Check for duplicate (same name and location)
-                    const existingAttendee = attendees.find(a =>
-                        a.name.toLowerCase() === name.toLowerCase() &&
-                        a.location.toLowerCase() === location.toLowerCase()
-                    );
+                    const existingAttendeeSnapshot = await attendeesCollection
+                        .where('name', '==', name)
+                        .where('location', '==', location)
+                        .get();
 
-                    if (existingAttendee) {
+                    if (!existingAttendeeSnapshot.empty) {
                         showNotification(`${name} from ${location} has already registered. Please use a different name or location.`, 'error');
                         return;
                     }
 
+                    const currentUser = getCurrentUser();
                     const attendee = {
                         name: name,
                         people: parseInt(formData.people),
                         location: location,
                         attending: true,
-                        timestamp: new Date().toISOString()
+                        timestamp: new Date().toISOString(),
+                        userId: currentUser?.uid || 'anonymous'
                     };
 
-                    const id = await db.attendees.add(attendee);
-                    setAttendees([...attendees, { ...attendee, id }]);
+                    // Add to localStorage
+                    const newAttendee = await attendeesCollection.add(attendee);
 
                     // Don't reset the name so it can be used in the message board
                     setFormData(prev => ({ ...prev, people: 1, location: '' }));
@@ -999,6 +1769,12 @@
 
                     // Create fireworks celebration only near the submit button
                     createFireworks('submit-rsvp', 15);
+
+                    // Check if this is an admin
+                    if (name.toLowerCase().includes('admin')) {
+                        setIsAdmin(true);
+                        showNotification('Admin privileges granted!', 'success');
+                    }
                 } catch (error) {
                     console.error('Error adding attendee:', error);
                     showNotification('Error registering for the reunion', 'error');
@@ -1076,18 +1852,33 @@
                 e.preventDefault();
                 if (!formData.message.trim()) return;
 
+                // Check if user is authenticated
+                if (!isAuthenticated) {
+                    // Sign in anonymously with the name from the form
+                    const name = formData.name.trim() || "Guest";
+                    const user = await signInAnonymously(name);
+                    if (user) {
+                        setUser(user);
+                        setIsAuthenticated(true);
+                        showNotification(`Welcome, ${name}!`, 'success');
+                    }
+                }
+
                 try {
-                    // Use the name from the RSVP form or "Guest" if not provided
-                    const sender = formData.name.trim() || "Guest";
+                    // Use the name from the RSVP form, user profile, or "Guest" if not provided
+                    const currentUser = getCurrentUser();
+                    const sender = formData.name.trim() || currentUser?.displayName || "Guest";
 
                     const message = {
                         sender: sender,
                         content: formData.message,
-                        timestamp: new Date().toISOString()
+                        timestamp: new Date().toISOString(),
+                        userId: currentUser?.uid || 'anonymous',
+                        recipient: null // null means public message
                     };
 
-                    const id = await db.messages.add(message);
-                    setMessages([...messages, { ...message, id }]);
+                    // Add to localStorage
+                    await messagesCollection.add(message);
 
                     // Reset message form
                     setFormData(prev => ({ ...prev, message: '' }));
@@ -1105,6 +1896,50 @@
                 }
             };
 
+            // Handle private message submission
+            const handlePrivateMessageSubmit = async (e) => {
+                e.preventDefault();
+                if (!formData.privateMessage.trim() || !privateMessageRecipient) return;
+
+                // Check if user is authenticated
+                if (!isAuthenticated) {
+                    // Sign in anonymously with the name from the form
+                    const name = formData.name.trim() || "Guest";
+                    const user = await signInAnonymously(name);
+                    if (user) {
+                        setUser(user);
+                        setIsAuthenticated(true);
+                        showNotification(`Welcome, ${name}!`, 'success');
+                    }
+                }
+
+                try {
+                    // Use the name from the RSVP form, user profile, or "Guest" if not provided
+                    const currentUser = getCurrentUser();
+                    const sender = formData.name.trim() || currentUser?.displayName || "Guest";
+
+                    const message = {
+                        sender: sender,
+                        content: formData.privateMessage,
+                        timestamp: new Date().toISOString(),
+                        userId: currentUser?.uid || 'anonymous',
+                        recipient: privateMessageRecipient
+                    };
+
+                    // Add to localStorage
+                    await messagesCollection.add(message);
+
+                    // Reset private message form
+                    setFormData(prev => ({ ...prev, privateMessage: '' }));
+
+                    // Show notification
+                    showNotification(`Private message sent to ${privateMessageRecipient}!`, 'success');
+                } catch (error) {
+                    console.error('Error sending private message:', error);
+                    showNotification('Error sending private message', 'error');
+                }
+            };
+
             // Handle activity submission
             const handleActivitySubmit = async (e) => {
                 e.preventDefault();
@@ -1115,15 +1950,34 @@
                     return;
                 }
 
+                // Check if user is authenticated
+                if (!isAuthenticated) {
+                    // Sign in anonymously with the name from the form
+                    const name = formData.name.trim() || "Guest";
+                    const user = await signInAnonymously(name);
+                    if (user) {
+                        setUser(user);
+                        setIsAuthenticated(true);
+                        showNotification(`Welcome, ${name}!`, 'success');
+                    }
+                }
+
                 try {
                     // Check for duplicate activity
                     const activityTitle = formData.activity.trim();
-                    const existingActivity = activities.find(a =>
-                        a.title.toLowerCase() === activityTitle.toLowerCase()
-                    );
 
-                    if (existingActivity) {
+                    // Query localStorage for existing activity
+                    const existingActivitySnapshot = await activitiesCollection
+                        .where('title', '==', activityTitle)
+                        .get();
+
+                    if (!existingActivitySnapshot.empty) {
                         // If it already exists, just add a vote instead
+                        const existingActivity = {
+                            id: existingActivitySnapshot.docs[0].id,
+                            ...existingActivitySnapshot.docs[0].data()
+                        };
+
                         handleVote('activity', existingActivity.id);
                         showNotification(`"${activityTitle}" already exists. Added a vote instead!`, 'info');
 
@@ -1137,16 +1991,20 @@
                     }
 
                     // Create new activity
+                    const currentUser = getCurrentUser();
+                    const userId = currentUser?.uid || 'anonymous';
                     const activity = {
                         title: activityTitle,
                         description: formData.activityDesc || '',
                         votes: 1, // Start with 1 vote (the submitter's vote)
-                        submitter: formData.name || 'Anonymous',
-                        timestamp: new Date().toISOString()
+                        submitter: formData.name || currentUser?.displayName || 'Anonymous',
+                        timestamp: new Date().toISOString(),
+                        userId: userId,
+                        voters: [userId] // Track who voted
                     };
 
-                    const id = await db.activities.add(activity);
-                    setActivities([...activities, { ...activity, id }]);
+                    // Add to localStorage
+                    await activitiesCollection.add(activity);
 
                     // Reset form
                     setFormData(prev => ({ ...prev, activity: '', activityDesc: '' }));
@@ -1255,27 +2113,101 @@
 
             // Handle vote
             const handleVote = async (type, id) => {
+                // Check if user is authenticated
+                if (!isAuthenticated) {
+                    // Sign in anonymously with the name from the form
+                    const name = formData.name.trim() || "Guest";
+                    const user = await signInAnonymously(name);
+                    if (user) {
+                        setUser(user);
+                        setIsAuthenticated(true);
+                        showNotification(`Welcome, ${name}!`, 'success');
+                    } else {
+                        showNotification('Please sign in to vote', 'error');
+                        return;
+                    }
+                }
+
+                const currentUser = getCurrentUser();
+                const userId = currentUser?.uid || 'anonymous';
+
                 try {
                     if (type === 'activity') {
-                        const activity = activities.find(a => a.id === id);
-                        if (activity) {
-                            const updatedActivity = { ...activity, votes: activity.votes + 1 };
-                            await db.activities.update(id, { votes: updatedActivity.votes });
-                            setActivities(activities.map(a => a.id === id ? updatedActivity : a));
-                            showNotification(`Voted for ${activity.title}`, 'success');
+                        // Get the activity document
+                        const activityRef = activitiesCollection.doc(id);
+                        const activityDoc = await activityRef.get();
+
+                        if (activityDoc.exists) {
+                            const activityData = activityDoc.data();
+                            const voters = activityData.voters || [];
+
+                            // Check if user already voted
+                            if (voters.includes(userId)) {
+                                showNotification('You have already voted for this activity', 'info');
+                                return;
+                            }
+
+                            // Update in localStorage
+                            const activities = LocalDB.getAll('activities');
+                            const activityIndex = activities.findIndex(a => a.id === id);
+
+                            if (activityIndex !== -1) {
+                                const activity = activities[activityIndex];
+                                const voters = activity.voters || [];
+
+                                // Update the activity
+                                activities[activityIndex] = {
+                                    ...activity,
+                                    votes: (activity.votes || 0) + 1,
+                                    voters: [...voters, userId]
+                                };
+
+                                // Save back to localStorage
+                                localStorage.setItem('activities', JSON.stringify(activities));
+                            }
+
+                            showNotification(`Voted for "${activityData.title}"!`, 'success');
                         }
                     } else if (type === 'food') {
-                        const food = foods.find(f => f.id === id);
-                        if (food) {
-                            const updatedFood = { ...food, votes: food.votes + 1 };
-                            await db.foods.update(id, { votes: updatedFood.votes });
-                            setFoods(foods.map(f => f.id === id ? updatedFood : f));
-                            showNotification(`Voted for ${food.title}`, 'success');
+                        // Get the food document
+                        const foodRef = foodsCollection.doc(id);
+                        const foodDoc = await foodRef.get();
+
+                        if (foodDoc.exists) {
+                            const foodData = foodDoc.data();
+                            const voters = foodData.voters || [];
+
+                            // Check if user already voted
+                            if (voters.includes(userId)) {
+                                showNotification('You have already voted for this food', 'info');
+                                return;
+                            }
+
+                            // Update in localStorage
+                            const foods = LocalDB.getAll('foods');
+                            const foodIndex = foods.findIndex(f => f.id === id);
+
+                            if (foodIndex !== -1) {
+                                const food = foods[foodIndex];
+                                const voters = food.voters || [];
+
+                                // Update the food
+                                foods[foodIndex] = {
+                                    ...food,
+                                    votes: (food.votes || 0) + 1,
+                                    voters: [...voters, userId]
+                                };
+
+                                // Save back to localStorage
+                                localStorage.setItem('foods', JSON.stringify(foods));
+                            }
+
+                            showNotification(`Voted for "${foodData.title}"!`, 'success');
                         }
                     }
                 } catch (error) {
-                    console.error('Error voting:', error);
-                    showNotification('Error recording vote', 'error');
+                    console.error(`Error voting for ${type}:`, error);
+                    showNotification(`Error voting for ${type}`, 'error');
                 }
             };
 
@@ -1354,6 +2286,27 @@
                 localStorage.setItem('darkMode', newDarkMode);
             };
 
+            // Sign out user
+            const signOut = async () => {
+                try {
+                    // Set user status to offline
+                    await setUserStatus(false);
+
+                    // Remove fake user from localStorage
+                    localStorage.removeItem('fakeUser');
+
+                    // Reset state
+                    setUser(null);
+                    setIsAuthenticated(false);
+                    setIsAdmin(false);
+
+                    showNotification('You have been signed out', 'info');
+                } catch (error) {
+                    console.error('Error signing out:', error);
+                    showNotification('Error signing out', 'error');
+                }
+            };
+
 
 
             // Clear the entire attendee list (admin only)
@@ -1362,8 +2315,8 @@
 
                 if (window.confirm('Are you sure you want to clear the entire RSVP list? This cannot be undone.')) {
                     try {
-                        // Clear the IndexedDB table
-                        await db.attendees.clear();
+                        // Clear attendees in localStorage
+                        localStorage.setItem('attendees', '[]');
 
                         // Update state
                         setAttendees([]);
@@ -1381,11 +2334,11 @@
                 if (!isAdmin) return;
 
                 try {
-                    // Remove from IndexedDB
-                    await db.attendees.delete(id);
-
-                    // Update state
-                    setAttendees(attendees.filter(a => a.id !== id));
+                    // Remove from localStorage
+                    const attendees = LocalDB.getAll('attendees');
+                    const updatedAttendees = attendees.filter(a => a.id !== id);
+                    localStorage.setItem('attendees', JSON.stringify(updatedAttendees));
+                    setAttendees(updatedAttendees);
 
                     showNotification('Attendee removed', 'success');
                 } catch (error) {
@@ -1399,11 +2352,11 @@
                 if (!isAdmin) return;
 
                 try {
-                    // Remove from IndexedDB
-                    await db.activities.delete(id);
-
-                    // Update state
-                    setActivities(activities.filter(a => a.id !== id));
+                    // Remove from localStorage
+                    const activities = LocalDB.getAll('activities');
+                    const updatedActivities = activities.filter(a => a.id !== id);
+                    localStorage.setItem('activities', JSON.stringify(updatedActivities));
+                    setActivities(updatedActivities);
 
                     showNotification('Activity removed', 'success');
                 } catch (error) {
@@ -1423,42 +2376,26 @@
                 document.getElementById('private-message').focus();
             };
 
-            // Handle private message submission
-            const handlePrivateMessageSubmit = async (e) => {
-                e.preventDefault();
-                if (!formData.privateMessage.trim() || !privateMessageRecipient) return;
 
-                try {
-                    // Use the name from the RSVP form or "Guest" if not provided
-                    const sender = formData.name.trim() || "Guest";
-
-                    const message = {
-                        sender: sender,
-                        recipient: privateMessageRecipient,
-                        content: formData.privateMessage,
-                        timestamp: new Date().toISOString()
-                    };
-
-                    const id = await db.messages.add(message);
-                    setMessages([...messages, { ...message, id }]);
-
-                    // Reset private message form
-                    setFormData(prev => ({ ...prev, privateMessage: '' }));
-
-                    // Show notification
-                    showNotification(`Private message sent to ${privateMessageRecipient}!`, 'success');
-
-                    // Send text notification to admin
-                    sendSMSNotification(`New private message from ${message.sender} to ${message.recipient}`);
-                } catch (error) {
-                    console.error('Error sending private message:', error);
-                    showNotification('Error sending private message', 'error');
-                }
-            };
 
             // Start video chat
             const startVideoChat = async (type = 'group') => {
                 try {
+                    // Check if user is authenticated
+                    if (!isAuthenticated) {
+                        // Sign in anonymously with the name from the form
+                        const name = formData.name.trim() || "Guest";
+                        const user = await signInAnonymously(name);
+                        if (user) {
+                            setUser(user);
+                            setIsAuthenticated(true);
+                            showNotification(`Welcome, ${name}!`, 'success');
+                        } else {
+                            showNotification('Please sign in to start a video chat', 'error');
+                            return;
+                        }
+                    }
+
                     // Set chat type
                     setChatType(type || 'group');
 
@@ -1470,12 +2407,14 @@
 
                     const stream = await navigator.mediaDevices.getUserMedia(constraints);
                     setLocalStream(stream);
+                    // Create a new variable instead of modifying the read-only one
+                    const newLocalStream = stream;
                     setShowVideoChat(true);
 
                     // Reset states
                     setIsMicMuted(false);
                     setIsCameraOff(false);
-                    setIsRemoteConnected(false); // In a real app, this would be set when someone connects
+                    setIsRemoteConnected(false);
 
                     // Set the stream to the video element
                     const videoElement = document.getElementById('local-video');
@@ -1483,29 +2422,107 @@
                         videoElement.srcObject = stream;
                     }
 
-                    // For demo purposes, simulate a remote connection after a delay
-                    if (type === 'private' || type === 'cb') {
+                    // Create a call room in localStorage
+                    const currentUser = getCurrentUser();
+                    if (currentUser) {
+                        const callId = type === 'group' ? 'group-call' : `private-call-${currentUser.uid}`;
+
+                        // Create or update call room
+                        const call = {
+                            id: callId,
+                            type: type,
+                            createdBy: currentUser.uid,
+                            createdAt: new Date().toISOString(),
+                            active: true,
+                            participants: {
+                                [currentUser.uid]: {
+                                    name: currentUser.displayName || formData.name || 'Guest',
+                                    joinedAt: new Date().toISOString(),
+                                    isActive: true
+                                }
+                            }
+                        };
+
+                        // Store in localStorage
+                        const calls = LocalDB.getAll('calls');
+                        const existingCallIndex = calls.findIndex(c => c.id === callId);
+
+                        if (existingCallIndex !== -1) {
+                            calls[existingCallIndex] = call;
+                        } else {
+                            calls.push(call);
+                        }
+
+                        localStorage.setItem('calls', JSON.stringify(calls));
+
+                        // For demo purposes, we'll simulate a peer connection
+                        // In a real app, you would use WebRTC with a signaling server
+
+                        // Simulate a remote user joining after a short delay
                         setTimeout(() => {
-                            setIsRemoteConnected(true);
-                            showNotification(`${selectedMember || 'A family member'} has joined the chat!`, 'success');
-                        }, 3000);
+                            // Create a simulated remote participant
+                            const simulatedParticipant = {
+                                id: 'simulated-user-' + Date.now(),
+                                name: 'Family Member',
+                                joinedAt: new Date().toISOString(),
+                                isActive: true
+                            };
+
+                            // Update the call with the new participant
+                            const calls = LocalDB.getAll('calls');
+                            const callIndex = calls.findIndex(c => c.id === callId);
+
+                            if (callIndex !== -1) {
+                                calls[callIndex].participants[simulatedParticipant.id] = simulatedParticipant;
+                                localStorage.setItem('calls', JSON.stringify(calls));
+
+                                // Update UI to show connected state
+                                setIsRemoteConnected(true);
+                                showNotification(`${simulatedParticipant.name} has joined the chat!`, 'success');
+                            }
+                        }, 2000); // 2 second delay
                     }
 
                     showNotification(`${type.charAt(0).toUpperCase() + type.slice(1)} chat started!`, 'success');
                 } catch (error) {
-                    console.error('Error accessing media devices:', error);
+                    console.error('Error starting video chat:', error);
                     showNotification('Error accessing camera or microphone. Please check permissions.', 'error');
                 }
             };
 
             // Stop video chat
             const stopVideoChat = () => {
+                // Stop media tracks
                 if (localStream) {
                     localStream.getTracks().forEach(track => track.stop());
                     setLocalStream(null);
                 }
+
+                // Update UI state
                 setShowVideoChat(false);
                 setIsRemoteConnected(false);
+
+                // Update call status in localStorage
+                const currentUser = getCurrentUser();
+                if (currentUser) {
+                    const callId = chatType === 'group' ? 'group-call' : `private-call-${currentUser.uid}`;
+
+                    // Get calls from localStorage
+                    const calls = LocalDB.getAll('calls');
+                    const callIndex = calls.findIndex(c => c.id === callId);
+
+                    if (callIndex !== -1) {
+                        // Update participant status
+                        if (calls[callIndex].participants[currentUser.uid]) {
+                            calls[callIndex].participants[currentUser.uid].isActive = false;
+                            calls[callIndex].participants[currentUser.uid].leftAt = new Date().toISOString();
+                        }
+
+                        // Save back to localStorage
+                        localStorage.setItem('calls', JSON.stringify(calls));
+                    }
+                }
+
                 showNotification('Chat session ended', 'info');
             };
 
@@ -1556,6 +2573,39 @@
                     }
                 }
             };
+
+            // Initialize fake auth state
+            React.useEffect(() => {
+                // Check for existing fake user in localStorage
+                const fakeUserStr = localStorage.getItem('fakeUser');
+                if (fakeUserStr) {
+                    try {
+                        const fakeUser = JSON.parse(fakeUserStr);
+                        setUser(fakeUser);
+                        setIsAuthenticated(true);
+
+                        // Set online status
+                        setUserStatus(true);
+
+                        // Check if user is admin
+                        if (fakeUser.displayName && fakeUser.displayName.toLowerCase().includes('admin')) {
+                            setIsAdmin(true);
+                        }
+                    } catch (error) {
+                        console.error('Error parsing fake user:', error);
+                    }
+                }
+
+                // Set up beforeunload event to update status when user leaves
+                window.addEventListener('beforeunload', () => {
+                    setUserStatus(false);
+                });
+
+                // Clean up on component unmount
+                return () => {
+                    setUserStatus(false);
+                };
+            }, []);
 
             // Initialize dark mode from localStorage on component mount
             React.useEffect(() => {
@@ -1646,6 +2696,39 @@
                             </div>
                             <h1 className="page-title text-4xl md:text-5xl font-bold text-purple-800 mb-2">Hall Family Reunion</h1>
                             <p className="text-xl text-purple-600">Celebrating Our Family Heritage</p>
+
+                            {/* User Profile Section */}
+                            <div className="mt-4 flex justify-center">
+                                {isAuthenticated ? (
+                                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-3 flex items-center">
+                                        <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold mr-3">
+                                            {user?.displayName?.charAt(0) || formData.name?.charAt(0) || 'G'}
+                                        </div>
+                                        <div className="text-left">
+                                            <div className="font-medium">
+                                                {user?.displayName || formData.name || 'Guest'}
+                                                {isAdmin && <span className="ml-2 text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full">Admin</span>}
+                                            </div>
+                                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                                                <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1"></span> Online
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={signOut}
+                                            className="ml-4 text-xs text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400"
+                                            title="Sign Out"
+                                        >
+                                            <i className="fas fa-sign-out-alt"></i>
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-3">
+                                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                                            Sign in by entering your name in the RSVP form
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
 

@@ -1,0 +1,23 @@
+{
+  "name": "familyreunion",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/4citeB4U/familyreunion.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/4citeB4U/familyreunion/issues"
+  },
+  "homepage": "https://github.com/4citeB4U/familyreunion#readme",
+  "dependencies": {
+    "firebase": "^11.7.1"
+  }
+}

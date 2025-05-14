@@ -1,0 +1,8 @@
+{
+  "rules": {
+    // For testing purposes, allow all reads and writes
+    // IMPORTANT: Change these rules before deploying to production
+    ".read": true,
+    ".write": true
+  }
+}
