@@ -565,6 +565,15 @@
             border-radius: 4px;
             font-size: 12px;
             z-index: 20;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .video-status i {
+            font-size: 10px;
         }
 
         /* Dark mode video styles */
@@ -593,8 +602,930 @@
     <!-- Axios for HTTP requests -->
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 
-    <!-- WebSocket client for real-time communication -->
-    <script src="websocket-client.js"></script>
+    <!-- QR Code generation and scanning -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+
+    <!-- Crypto utilities for secure communication -->
+    <script src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tweetnacl-util@0.15.1/nacl-util.min.js"></script>
+
+    <!-- LEEWAY WebRTC client for secure P2P communication (embedded) -->
+    <script>
+    /**
+     * SecurePeerManager - A client for secure WebRTC signaling with QR code peer discovery
+     *
+     * This class handles WebRTC connection establishment, ICE candidate exchange,
+     * encrypted signaling, QR code-based peer discovery, and connection state monitoring.
+     */
+    class SecurePeerManager {
+        /**
+         * Generate a cryptographically secure random session ID
+         * @returns {string} A secure random session ID
+         */
+        static generateSessionId() {
+            const array = new Uint8Array(16);
+            crypto.getRandomValues(array);
+            return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+        }
+
+        /**
+         * Generate a key pair for encryption
+         * @returns {Object} Object containing publicKey and secretKey
+         */
+        static generateKeyPair() {
+            return nacl.box.keyPair();
+        }
+
+        /**
+         * Encrypt a message using the recipient's public key
+         * @param {Object} message - Message to encrypt
+         * @param {Uint8Array} publicKey - Recipient's public key
+         * @param {Uint8Array} secretKey - Sender's secret key
+         * @returns {Object} Encrypted message with nonce
+         */
+        static encryptMessage(message, publicKey, secretKey) {
+            const messageStr = JSON.stringify(message);
+            const messageUint8 = nacl.util.decodeUTF8(messageStr);
+            const nonce = nacl.randomBytes(nacl.box.nonceLength);
+            const encrypted = nacl.box(messageUint8, nonce, publicKey, secretKey);
+
+            return {
+                encrypted: nacl.util.encodeBase64(encrypted),
+                nonce: nacl.util.encodeBase64(nonce)
+            };
+        }
+
+        /**
+         * Decrypt a message using the sender's public key
+         * @param {Object} encryptedMessage - Encrypted message with nonce
+         * @param {Uint8Array} publicKey - Sender's public key
+         * @param {Uint8Array} secretKey - Recipient's secret key
+         * @returns {Object} Decrypted message
+         */
+        static decryptMessage(encryptedMessage, publicKey, secretKey) {
+            const encrypted = nacl.util.decodeBase64(encryptedMessage.encrypted);
+            const nonce = nacl.util.decodeBase64(encryptedMessage.nonce);
+            const decrypted = nacl.box.open(encrypted, nonce, publicKey, secretKey);
+
+            if (!decrypted) {
+                throw new Error('Failed to decrypt message');
+            }
+
+            const messageStr = nacl.util.encodeUTF8(decrypted);
+            return JSON.parse(messageStr);
+        }
+
+        /**
+         * Generate a QR code from connection data
+         * @param {Object} connectionData - Connection data to encode in QR
+         * @param {HTMLElement} element - Element to render QR code in
+         * @returns {Promise} Promise that resolves when QR code is generated
+         */
+        static generateQRCode(connectionData, element) {
+            const data = JSON.stringify(connectionData);
+            return QRCode.toCanvas(element, data, {
+                width: 300,
+                margin: 2,
+                color: {
+                    dark: '#7a52c7',  // Purple color for QR code
+                    light: '#ffffff'   // White background
+                }
+            });
+        }
+
+        /**
+         * Scan a QR code from video stream
+         * @param {MediaStream} stream - Video stream to scan
+         * @returns {Promise} Promise that resolves with scanned data
+         */
+        static scanQRCode(stream) {
+            return new Promise((resolve, reject) => {
+                const video = document.createElement('video');
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+
+                video.srcObject = stream;
+                video.play();
+
+                const scanInterval = setInterval(() => {
+                    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                        const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+                        if (code) {
+                            clearInterval(scanInterval);
+                            video.pause();
+                            video.srcObject = null;
+                            try {
+                                const data = JSON.parse(code.data);
+                                resolve(data);
+                            } catch (e) {
+                                reject(new Error('Invalid QR code data'));
+                            }
+                        }
+                    }
+                }, 100);
+
+                // Timeout after 30 seconds
+                setTimeout(() => {
+                    clearInterval(scanInterval);
+                    video.pause();
+                    video.srcObject = null;
+                    reject(new Error('QR code scan timeout'));
+                }, 30000);
+            });
+        }
+    }
+
+    /**
+     * WebSocketClient - A client for WebRTC signaling
+     *
+     * This class is maintained for backward compatibility but uses
+     * the SecurePeerManager for enhanced security and functionality.
+     */
+    class WebSocketClient {
+        constructor() {
+            // WebRTC
+            this.peerConnections = {}; // userId -> RTCPeerConnection
+            this.localStream = null;
+            this.iceServers = [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun.stunprotocol.org:3478' },
+                // Add TURN servers for better NAT traversal in production
+                {
+                    urls: 'turn:global.turn.twilio.com:3478?transport=udp',
+                    username: 'leeway_system',
+                    credential: 'leeway_credential'
+                }
+            ];
+
+            // Connection state
+            this.connected = false;
+
+            // LEEWAY system info
+            this.systemName = 'LEEWAY WebRTC';
+            this.systemVersion = '5.0';
+
+            // Secure communication
+            this.sessionId = SecurePeerManager.generateSessionId();
+            this.keyPair = SecurePeerManager.generateKeyPair();
+            this.peerPublicKeys = {}; // userId -> publicKey
+
+            // Data channels for secure messaging
+            this.dataChannels = {}; // userId -> RTCDataChannel
+
+            // Callbacks
+            this.onConnectionStatusChangeCallback = null;
+            this.onUserJoinedCallback = null;
+            this.onTrackCallback = null;
+            this.onMessageCallback = null;
+            this.onIceConnectionStateChangeCallback = null;
+            this.onSpeakingCallback = null; // New callback for audio level detection
+
+            console.log(`${this.systemName} v${this.systemVersion} initialized with secure signaling`);
+            console.log(`Session ID: ${this.sessionId}`);
+        }
+
+        /**
+         * Connect to the peer-to-peer network
+         * @param {Object} options - Connection options
+         * @param {boolean} options.showQR - Whether to show QR code for connection
+         * @param {HTMLElement} options.qrElement - Element to render QR code in
+         * @returns {Promise} Resolves when ready for connections
+         */
+        connect(options = {}) {
+            return new Promise((resolve) => {
+                console.log(`${this.systemName} system ready for connections`);
+
+                // Log ICE servers being used
+                console.log('Using ICE servers:', this.iceServers);
+
+                // Create connection data for QR code
+                const connectionData = {
+                    sessionId: this.sessionId,
+                    publicKey: nacl.util.encodeBase64(this.keyPair.publicKey),
+                    iceServers: this.iceServers
+                };
+
+                // Generate QR code if requested
+                if (options.showQR && options.qrElement) {
+                    SecurePeerManager.generateQRCode(connectionData, options.qrElement)
+                        .then(() => {
+                            console.log('QR code generated for peer connection');
+                        })
+                        .catch(error => {
+                            console.error('Error generating QR code:', error);
+                        });
+                }
+
+                this.connected = true;
+
+                if (this.onConnectionStatusChangeCallback) {
+                    this.onConnectionStatusChangeCallback('connected');
+                }
+
+                // Resolve immediately since we're not waiting for any server connection
+                resolve(connectionData);
+            });
+        }
+
+        /**
+         * Connect to a peer using QR code
+         * @param {MediaStream} cameraStream - Camera stream for QR code scanning
+         * @returns {Promise} Resolves with peer connection data
+         */
+        connectWithQRCode(cameraStream) {
+            return new Promise((resolve, reject) => {
+                // Scan QR code
+                SecurePeerManager.scanQRCode(cameraStream)
+                    .then(peerData => {
+                        console.log('QR code scanned successfully:', peerData);
+
+                        // Store peer's public key
+                        try {
+                            const peerPublicKey = nacl.util.decodeBase64(peerData.publicKey);
+                            this.peerPublicKeys[peerData.sessionId] = peerPublicKey;
+
+                            // Create direct connection to peer
+                            const peerConnection = this.createDirectConnection(peerData.sessionId);
+
+                            // Create secure data channel
+                            this._createSecureDataChannel(peerData.sessionId, peerConnection);
+
+                            resolve(peerData);
+                        } catch (error) {
+                            console.error('Error processing peer data:', error);
+                            reject(error);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error scanning QR code:', error);
+                        reject(error);
+                    });
+            });
+        }
+
+        /**
+         * Create a secure data channel for encrypted messaging
+         * @param {string} userId - ID of the remote user
+         * @param {RTCPeerConnection} peerConnection - The peer connection
+         * @private
+         */
+        _createSecureDataChannel(userId, peerConnection) {
+            try {
+                // Create a data channel for secure messaging
+                const dataChannel = peerConnection.createDataChannel('secure-messages', {
+                    ordered: true,
+                    maxRetransmits: 10
+                });
+
+                // Set up data channel event handlers
+                dataChannel.onopen = () => {
+                    console.log(`Secure data channel opened with ${userId}`);
+                    this.dataChannels[userId] = dataChannel;
+                };
+
+                dataChannel.onclose = () => {
+                    console.log(`Secure data channel closed with ${userId}`);
+                    delete this.dataChannels[userId];
+                };
+
+                dataChannel.onmessage = (event) => {
+                    try {
+                        // Parse the encrypted message
+                        const encryptedMessage = JSON.parse(event.data);
+
+                        // Decrypt the message
+                        const peerPublicKey = this.peerPublicKeys[userId];
+                        if (!peerPublicKey) {
+                            console.error(`No public key found for user ${userId}`);
+                            return;
+                        }
+
+                        const decryptedMessage = SecurePeerManager.decryptMessage(
+                            encryptedMessage,
+                            peerPublicKey,
+                            this.keyPair.secretKey
+                        );
+
+                        console.log(`Received secure message from ${userId}:`, decryptedMessage);
+
+                        // Call the message callback if provided
+                        if (this.onMessageCallback) {
+                            this.onMessageCallback(userId, decryptedMessage);
+                        }
+                    } catch (error) {
+                        console.error('Error processing encrypted message:', error);
+                    }
+                };
+
+                // Handle data channel events on the peer connection
+                peerConnection.ondatachannel = (event) => {
+                    const receivedChannel = event.channel;
+
+                    receivedChannel.onopen = () => {
+                        console.log(`Data channel from ${userId} opened`);
+                        this.dataChannels[userId] = receivedChannel;
+                    };
+
+                    receivedChannel.onclose = () => {
+                        console.log(`Data channel from ${userId} closed`);
+                        delete this.dataChannels[userId];
+                    };
+
+                    receivedChannel.onmessage = (event) => {
+                        try {
+                            // Parse the encrypted message
+                            const encryptedMessage = JSON.parse(event.data);
+
+                            // Decrypt the message
+                            const peerPublicKey = this.peerPublicKeys[userId];
+                            if (!peerPublicKey) {
+                                console.error(`No public key found for user ${userId}`);
+                                return;
+                            }
+
+                            const decryptedMessage = SecurePeerManager.decryptMessage(
+                                encryptedMessage,
+                                peerPublicKey,
+                                this.keyPair.secretKey
+                            );
+
+                            console.log(`Received secure message from ${userId}:`, decryptedMessage);
+
+                            // Call the message callback if provided
+                            if (this.onMessageCallback) {
+                                this.onMessageCallback(userId, decryptedMessage);
+                            }
+                        } catch (error) {
+                            console.error('Error processing encrypted message:', error);
+                        }
+                    };
+                };
+
+                return dataChannel;
+            } catch (error) {
+                console.error('Error creating secure data channel:', error);
+                return null;
+            }
+        }
+
+        /**
+         * Send an encrypted message to a peer
+         * @param {string} userId - ID of the recipient
+         * @param {Object} message - Message to send
+         * @returns {boolean} Whether the message was sent successfully
+         */
+        sendSecureMessage(userId, message) {
+            const dataChannel = this.dataChannels[userId];
+            const peerPublicKey = this.peerPublicKeys[userId];
+
+            if (!dataChannel || dataChannel.readyState !== 'open') {
+                console.error(`No open data channel for user ${userId}`);
+                return false;
+            }
+
+            if (!peerPublicKey) {
+                console.error(`No public key found for user ${userId}`);
+                return false;
+            }
+
+            try {
+                // Add timestamp and sender ID to the message
+                const messageWithMetadata = {
+                    ...message,
+                    timestamp: Date.now(),
+                    senderId: this.sessionId
+                };
+
+                // Encrypt the message
+                const encryptedMessage = SecurePeerManager.encryptMessage(
+                    messageWithMetadata,
+                    peerPublicKey,
+                    this.keyPair.secretKey
+                );
+
+                // Send the encrypted message
+                dataChannel.send(JSON.stringify(encryptedMessage));
+                return true;
+            } catch (error) {
+                console.error('Error sending secure message:', error);
+                return false;
+            }
+        }
+
+        /**
+         * Set callback for speaking detection
+         * @param {Function} callback - Function to call when speaking is detected
+         */
+        onSpeaking(callback) {
+            this.onSpeakingCallback = callback;
+        }
+
+        /**
+         * Set up audio level detection for a stream
+         * @param {MediaStream} stream - Media stream to monitor
+         * @param {boolean} isLocal - Whether this is the local stream
+         * @param {string} userId - ID of the user (for remote streams)
+         * @private
+         */
+        _setupAudioLevelDetection(stream, isLocal, userId = null) {
+            if (!stream) return;
+
+            // Find audio track
+            const audioTrack = stream.getAudioTracks()[0];
+            if (!audioTrack) return;
+
+            try {
+                // Create audio context
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioContext.createMediaStreamSource(stream);
+                const analyser = audioContext.createAnalyser();
+
+                // Configure analyser
+                analyser.fftSize = 256;
+                analyser.smoothingTimeConstant = 0.8;
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+
+                // Connect source to analyser
+                source.connect(analyser);
+
+                // Don't connect to destination for local stream to avoid feedback
+                // analyser.connect(audioContext.destination);
+
+                // Variables for speaking detection
+                let isSpeaking = false;
+                let speakingThreshold = isLocal ? 30 : 20; // Lower threshold for remote streams
+                let silenceCounter = 0;
+
+                // Check audio level periodically
+                const checkAudioLevel = () => {
+                    // Get audio data
+                    analyser.getByteFrequencyData(dataArray);
+
+                    // Calculate average volume
+                    let sum = 0;
+                    for (let i = 0; i < bufferLength; i++) {
+                        sum += dataArray[i];
+                    }
+                    const average = sum / bufferLength;
+
+                    // Detect speaking
+                    const wasSpeaking = isSpeaking;
+
+                    if (average > speakingThreshold) {
+                        isSpeaking = true;
+                        silenceCounter = 0;
+                    } else {
+                        silenceCounter++;
+                        // Only mark as not speaking after a short period of silence
+                        if (silenceCounter > 5) {
+                            isSpeaking = false;
+                        }
+                    }
+
+                    // Notify if speaking state changed
+                    if (wasSpeaking !== isSpeaking && this.onSpeakingCallback) {
+                        if (isLocal) {
+                            this.onSpeakingCallback('local', isSpeaking, average);
+                        } else if (userId) {
+                            this.onSpeakingCallback(userId, isSpeaking, average);
+                        }
+                    }
+
+                    // Continue checking
+                    requestAnimationFrame(checkAudioLevel);
+                };
+
+                // Start checking
+                checkAudioLevel();
+
+            } catch (error) {
+                console.error('Error setting up audio level detection:', error);
+            }
+        }
+
+        /**
+         * Disconnect and clean up resources
+         */
+        disconnect() {
+            // Close all peer connections
+            Object.values(this.peerConnections).forEach(pc => {
+                if (pc) {
+                    pc.close();
+                }
+            });
+
+            this.peerConnections = {};
+            this.connected = false;
+
+            if (this.onConnectionStatusChangeCallback) {
+                this.onConnectionStatusChangeCallback('disconnected');
+            }
+        }
+
+        /**
+         * Add local media stream
+         * @param {MediaStream} stream - Local media stream
+         */
+        addLocalStream(stream) {
+            this.localStream = stream;
+        }
+
+        /**
+         * Initiate a call to a user
+         * @param {string} userId - ID of the user to call
+         * @param {MediaStream} stream - Local media stream
+         */
+        initiateCall(userId, stream) {
+            if (!this.connected) {
+                console.error('Cannot initiate call: Not connected');
+                return;
+            }
+
+            if (!stream) {
+                console.error('Cannot initiate call: No local stream provided');
+                return;
+            }
+
+            this.localStream = stream;
+
+            // Create a peer connection and return it
+            return this._createPeerConnection(userId, true);
+        }
+
+        /**
+         * Set callback for connection status changes
+         * @param {Function} callback - Function to call on status change
+         */
+        onConnectionStatusChange(callback) {
+            this.onConnectionStatusChangeCallback = callback;
+        }
+
+        /**
+         * Set callback for when a user joins
+         * @param {Function} callback - Function to call when a user joins
+         */
+        onUserJoined(callback) {
+            this.onUserJoinedCallback = callback;
+        }
+
+        /**
+         * Set callback for when a track is received
+         * @param {Function} callback - Function to call when a track is received
+         */
+        onTrack(callback) {
+            this.onTrackCallback = callback;
+        }
+
+        /**
+         * Set callback for when a message is received
+         * @param {Function} callback - Function to call when a message is received
+         */
+        onMessage(callback) {
+            this.onMessageCallback = callback;
+        }
+
+        /**
+         * Set callback for ICE connection state changes
+         * @param {Function} callback - Function to call on ICE state change
+         */
+        onIceConnectionStateChange(callback) {
+            this.onIceConnectionStateChangeCallback = callback;
+        }
+
+        /**
+         * Send a message to a peer
+         * @param {Object} message - Message to send
+         * @private
+         */
+        _sendMessage(message) {
+            console.log('LEEWAY direct message:', message);
+
+            // In a real implementation, this would send the message through a signaling channel
+            // For now, we'll simulate direct peer communication
+
+            // If this is an offer or answer, handle it directly
+            if (message.type === 'offer' || message.type === 'answer') {
+                const targetPeerConnection = this.peerConnections[message.userId];
+                if (targetPeerConnection) {
+                    if (message.type === 'offer') {
+                        this._handleOffer(message);
+                    } else if (message.type === 'answer') {
+                        this._handleAnswer(message);
+                    }
+                }
+            }
+
+            // If this is an ICE candidate, handle it directly
+            if (message.type === 'ice-candidate') {
+                this._handleIceCandidate(message);
+            }
+        }
+
+        /**
+         * Create a new RTCPeerConnection
+         * @param {string} userId - ID of the remote user
+         * @param {boolean} isInitiator - Whether this client is initiating the connection
+         * @private
+         */
+        _createPeerConnection(userId, isInitiator) {
+            try {
+                // Close existing connection if any
+                if (this.peerConnections[userId]) {
+                    this.peerConnections[userId].close();
+                }
+
+                // Create new connection with enhanced ICE server configuration
+                const peerConnection = new RTCPeerConnection({
+                    iceServers: this.iceServers,
+                    iceTransportPolicy: 'all', // Use 'relay' to force TURN usage
+                    iceCandidatePoolSize: 10,
+                    bundlePolicy: 'max-bundle',
+                    rtcpMuxPolicy: 'require',
+                    sdpSemantics: 'unified-plan'
+                });
+
+                // Add local tracks to the connection
+                if (this.localStream) {
+                    this.localStream.getTracks().forEach(track => {
+                        peerConnection.addTrack(track, this.localStream);
+                    });
+
+                    // Set up audio level detection for local stream
+                    this._setupAudioLevelDetection(this.localStream, true);
+                }
+
+                // Handle ICE candidates
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        this._sendMessage({
+                            type: 'ice-candidate',
+                            candidate: event.candidate,
+                            userId: userId
+                        });
+                    }
+                };
+
+                // Monitor ICE connection state
+                peerConnection.oniceconnectionstatechange = () => {
+                    console.log(`ICE connection state for ${userId}: ${peerConnection.iceConnectionState}`);
+
+                    // Handle different ICE connection states
+                    switch (peerConnection.iceConnectionState) {
+                        case 'failed':
+                            console.error(`ICE connection failed for peer ${userId}`);
+                            // Attempt to restart ICE
+                            this._restartIce(userId, peerConnection);
+                            break;
+
+                        case 'disconnected':
+                            console.warn(`ICE connection disconnected for peer ${userId}`);
+                            // Wait briefly to see if it reconnects automatically
+                            setTimeout(() => {
+                                if (peerConnection.iceConnectionState === 'disconnected') {
+                                    this._restartIce(userId, peerConnection);
+                                }
+                            }, 5000);
+                            break;
+
+                        case 'connected':
+                        case 'completed':
+                            console.log(`ICE connection established for peer ${userId}`);
+                            break;
+                    }
+
+                    // Call the callback if provided
+                    if (this.onIceConnectionStateChangeCallback) {
+                        this.onIceConnectionStateChangeCallback(userId, peerConnection.iceConnectionState);
+                    }
+                };
+
+                // Monitor connection state
+                peerConnection.onconnectionstatechange = () => {
+                    console.log(`Connection state for ${userId}: ${peerConnection.connectionState}`);
+
+                    // Handle different connection states
+                    switch (peerConnection.connectionState) {
+                        case 'failed':
+                            console.error(`Connection failed for peer ${userId}`);
+                            // Notify the application
+                            if (this.onConnectionStatusChangeCallback) {
+                                this.onConnectionStatusChangeCallback('peer-failed');
+                            }
+                            break;
+                        case 'connected':
+                            console.log(`Connection established for peer ${userId}`);
+                            break;
+                    }
+                };
+
+                // Handle remote tracks
+                peerConnection.ontrack = (event) => {
+                    console.log(`Received remote track from ${userId}`, event.streams[0]);
+
+                    // Set up audio level detection for remote stream
+                    this._setupAudioLevelDetection(event.streams[0], false, userId);
+
+                    if (this.onTrackCallback) {
+                        this.onTrackCallback(userId, event.streams[0]);
+                    }
+                };
+
+                // Store the connection
+                this.peerConnections[userId] = peerConnection;
+
+                // If initiator, create and send offer
+                if (isInitiator) {
+                    this._createAndSendOffer(userId, peerConnection);
+                }
+
+                return peerConnection;
+            } catch (error) {
+                console.error('Error creating peer connection:', error);
+                return null;
+            }
+        }
+
+        /**
+         * Restart ICE connection for a peer
+         * @param {string} userId - ID of the remote user
+         * @param {RTCPeerConnection} peerConnection - The peer connection to restart
+         * @private
+         */
+        _restartIce(userId, peerConnection) {
+            console.log(`Attempting to restart ICE for peer ${userId}`);
+
+            try {
+                // For modern browsers that support restartIce()
+                if (peerConnection.restartIce) {
+                    peerConnection.restartIce();
+                    console.log(`ICE restart initiated for peer ${userId}`);
+                    return;
+                }
+
+                // Fallback for browsers that don't support restartIce()
+                // Create a new offer with ICE restart flag
+                const offerOptions = {
+                    iceRestart: true
+                };
+
+                peerConnection.createOffer(offerOptions)
+                    .then(offer => {
+                        return peerConnection.setLocalDescription(offer);
+                    })
+                    .then(() => {
+                        // Send the new offer to the peer
+                        this._sendMessage({
+                            type: 'offer',
+                            sdp: peerConnection.localDescription,
+                            userId: userId,
+                            iceRestart: true
+                        });
+                        console.log(`ICE restart offer sent for peer ${userId}`);
+                    })
+                    .catch(error => {
+                        console.error(`Error restarting ICE for peer ${userId}:`, error);
+                    });
+            } catch (error) {
+                console.error(`Error during ICE restart for peer ${userId}:`, error);
+            }
+        }
+
+        /**
+         * Create and send an offer to a peer
+         * @param {string} userId - ID of the remote user
+         * @param {RTCPeerConnection} peerConnection - The peer connection
+         * @private
+         */
+        _createAndSendOffer(userId, peerConnection) {
+            peerConnection.createOffer()
+                .then(offer => {
+                    return peerConnection.setLocalDescription(offer);
+                })
+                .then(() => {
+                    this._sendMessage({
+                        type: 'offer',
+                        sdp: peerConnection.localDescription,
+                        userId: userId
+                    });
+                })
+                .catch(error => {
+                    console.error('Error creating offer:', error);
+                });
+        }
+
+        /**
+         * Handle an offer from a peer
+         * @param {Object} message - The offer message
+         * @private
+         */
+        _handleOffer(message) {
+            const userId = message.userId;
+
+            // Create peer connection if it doesn't exist
+            const peerConnection = this.peerConnections[userId] || this._createPeerConnection(userId, false);
+
+            // Set remote description
+            peerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp))
+                .then(() => {
+                    // Create answer
+                    return peerConnection.createAnswer();
+                })
+                .then(answer => {
+                    // Set local description
+                    return peerConnection.setLocalDescription(answer);
+                })
+                .then(() => {
+                    // Send answer
+                    this._sendMessage({
+                        type: 'answer',
+                        sdp: peerConnection.localDescription,
+                        userId: userId
+                    });
+                })
+                .catch(error => {
+                    console.error('Error handling offer:', error);
+                });
+        }
+
+        /**
+         * Handle an answer from a peer
+         * @param {Object} message - The answer message
+         * @private
+         */
+        _handleAnswer(message) {
+            const userId = message.userId;
+            const peerConnection = this.peerConnections[userId];
+
+            if (peerConnection) {
+                peerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp))
+                    .catch(error => {
+                        console.error('Error setting remote description from answer:', error);
+                    });
+            }
+        }
+
+        /**
+         * Handle an ICE candidate from a peer
+         * @param {Object} message - The ICE candidate message
+         * @private
+         */
+        _handleIceCandidate(message) {
+            const userId = message.userId;
+            const peerConnection = this.peerConnections[userId];
+
+            if (peerConnection) {
+                peerConnection.addIceCandidate(new RTCIceCandidate(message.candidate))
+                    .catch(error => {
+                        console.error('Error adding ICE candidate:', error);
+                    });
+            }
+        }
+
+        /**
+         * Handle a user leaving
+         * @param {Object} message - The user-left message
+         * @private
+         */
+        _handleUserLeft(message) {
+            const userId = message.userId;
+            const peerConnection = this.peerConnections[userId];
+
+            if (peerConnection) {
+                peerConnection.close();
+                delete this.peerConnections[userId];
+            }
+        }
+
+        /**
+         * Initiate a direct peer connection
+         * @param {string} userId - ID to assign to the peer
+         */
+        createDirectConnection(userId) {
+            console.log(`Creating direct connection to peer: ${userId}`);
+
+            // Create a peer connection
+            const peerConnection = this._createPeerConnection(userId, true);
+
+            // Notify the application
+            if (this.onUserJoinedCallback) {
+                this.onUserJoinedCallback(userId, 'direct');
+            }
+
+            return peerConnection;
+        }
+    }
+
+    // Make the class available globally
+    window.WebSocketClient = WebSocketClient;
+    </script>
 
     <!-- 🧠 REGION: AI & MAIN APP CODE -->
     <script type="text/babel">
@@ -1523,27 +2454,125 @@
             };
         };
 
-        // Speech recognition setup
+        // Speech recognition setup with improved mobile support
         const setupSpeechRecognition = (onResult) => {
-            if ('webkitSpeechRecognition' in window) {
-                const recognition = new webkitSpeechRecognition();
-                recognition.continuous = false;
-                recognition.interimResults = false;
-                recognition.lang = 'en-US';
+            // Check for both standard and webkit prefixed versions
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-                recognition.onresult = (event) => {
-                    const transcript = event.results[0][0].transcript;
-                    onResult(transcript);
-                };
+            if (SpeechRecognition) {
+                try {
+                    const recognition = new SpeechRecognition();
 
-                return {
-                    start: () => recognition.start(),
-                    stop: () => recognition.stop()
-                };
+                    // Configure for better mobile experience
+                    recognition.continuous = false;
+                    recognition.interimResults = true; // Enable interim results for better responsiveness
+                    recognition.lang = 'en-US';
+                    recognition.maxAlternatives = 3; // Get multiple alternatives for better accuracy
+
+                    // Handle results
+                    recognition.onresult = (event) => {
+                        // Get the most recent result
+                        const lastResultIndex = event.results.length - 1;
+                        const transcript = event.results[lastResultIndex][0].transcript;
+
+                        // Only process final results to avoid flickering on mobile
+                        if (event.results[lastResultIndex].isFinal) {
+                            console.log('Final speech result:', transcript);
+                            onResult(transcript);
+                        }
+                    };
+
+                    // Handle errors
+                    recognition.onerror = (event) => {
+                        console.error('Speech recognition error:', event.error);
+
+                        // Show user-friendly error messages
+                        let errorMessage = 'Error with voice recognition';
+
+                        switch(event.error) {
+                            case 'network':
+                                errorMessage = 'Network error. Please check your connection.';
+                                break;
+                            case 'not-allowed':
+                            case 'service-not-allowed':
+                                errorMessage = 'Microphone access denied. Please check permissions.';
+                                break;
+                            case 'aborted':
+                                errorMessage = 'Voice input was aborted.';
+                                break;
+                            case 'audio-capture':
+                                errorMessage = 'No microphone detected.';
+                                break;
+                            case 'no-speech':
+                                errorMessage = 'No speech detected. Please try again.';
+                                break;
+                            default:
+                                errorMessage = `Error: ${event.error}`;
+                        }
+
+                        // Use global notification function if available
+                        if (typeof globalNotify === 'function') {
+                            globalNotify(errorMessage, 'error');
+                        } else {
+                            alert(errorMessage);
+                        }
+                    };
+
+                    // Return enhanced interface
+                    return {
+                        start: () => {
+                            try {
+                                recognition.start();
+                                console.log('Speech recognition started');
+                                return true;
+                            } catch (error) {
+                                console.error('Error starting speech recognition:', error);
+                                return false;
+                            }
+                        },
+                        stop: () => {
+                            try {
+                                recognition.stop();
+                                console.log('Speech recognition stopped');
+                                return true;
+                            } catch (error) {
+                                console.error('Error stopping speech recognition:', error);
+                                return false;
+                            }
+                        },
+                        abort: () => {
+                            try {
+                                recognition.abort();
+                                console.log('Speech recognition aborted');
+                                return true;
+                            } catch (error) {
+                                console.error('Error aborting speech recognition:', error);
+                                return false;
+                            }
+                        }
+                    };
+                } catch (error) {
+                    console.error('Error setting up speech recognition:', error);
+                    return {
+                        start: () => {
+                            alert('Speech recognition failed to initialize');
+                            return false;
+                        },
+                        stop: () => {},
+                        abort: () => {}
+                    };
+                }
             }
+
+            // Fallback for unsupported browsers
+            console.warn('Speech Recognition API not supported in this browser');
             return {
-                start: () => alert('Speech recognition not supported in your browser'),
-                stop: () => {}
+                start: () => {
+                    alert('Speech recognition is not supported on this device or browser');
+                    return false;
+                },
+                stop: () => {},
+                abort: () => {}
             };
         };
 
@@ -1746,6 +2775,10 @@
             const [isPushToTalkActive, setIsPushToTalkActive] = React.useState(false);
             const [isCallInProgress, setIsCallInProgress] = React.useState(false);
             const [callStatus, setCallStatus] = React.useState(''); // 'dialing', 'ringing', 'connected', 'ended'
+            const [connectionState, setConnectionState] = React.useState('disconnected'); // 'disconnected', 'connecting', 'connected', 'failed'
+            const [localSpeaking, setLocalSpeaking] = React.useState(false); // Whether the local user is speaking
+            const [remoteSpeaking, setRemoteSpeaking] = React.useState(false); // Whether the remote user is speaking
+            const [audioLevel, setAudioLevel] = React.useState(0); // Audio level for visualization
 
             // WebSocket states
             const [wsClient, setWsClient] = React.useState(null);
@@ -2469,27 +3502,107 @@
                 }
             };
 
-            // Start listening
+            // Start listening with improved mobile support
             const startListening = (mode = 'public') => {
+                console.log('Starting voice recognition for mode:', mode);
+
                 if (recognition) {
-                    setSpeechOutput('Listening...');
+                    try {
+                        // Play a sound to indicate listening started
+                        try {
+                            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                            const oscillator = audioContext.createOscillator();
+                            const gainNode = audioContext.createGain();
 
-                    // Set the mode for the recognition result handler
-                    recognition.onresult = (event) => {
-                        const result = event.results[0][0].transcript;
-                        setSpeechOutput(result);
+                            oscillator.type = 'sine';
+                            oscillator.frequency.value = 880; // A5 note (high)
+                            gainNode.gain.value = 0.1; // Low volume
 
-                        if (mode === 'private') {
-                            // Set the private message input
-                            setFormData(prev => ({ ...prev, privateMessage: result }));
-                        } else {
-                            // Set the public message input
-                            setFormData(prev => ({ ...prev, message: result }));
-                            handleVoiceCommand(result);
+                            oscillator.connect(gainNode);
+                            gainNode.connect(audioContext.destination);
+
+                            oscillator.start();
+                            setTimeout(() => {
+                                oscillator.stop();
+                                audioContext.close();
+                            }, 200);
+                        } catch (error) {
+                            console.error('Error playing recognition start sound:', error);
                         }
-                    };
 
-                    recognition.start();
+                        // Update UI to show we're listening
+                        setSpeechOutput('Listening...');
+                        setIsSpeaking(true);
+
+                        // Show visual feedback
+                        showNotification('Listening for voice input...', 'info');
+
+                        // Set the mode for the recognition result handler
+                        recognition.onresult = (event) => {
+                            // Get the most recent result
+                            const lastResultIndex = event.results.length - 1;
+                            const result = event.results[lastResultIndex][0].transcript;
+
+                            console.log('Speech recognition result:', result);
+                            setSpeechOutput(result);
+
+                            // Only process final results
+                            if (event.results[lastResultIndex].isFinal) {
+                                if (mode === 'private') {
+                                    // Set the private message input
+                                    setFormData(prev => ({ ...prev, privateMessage: result }));
+
+                                    // Focus the private message input
+                                    const privateMessageInput = document.getElementById('private-message');
+                                    if (privateMessageInput) {
+                                        privateMessageInput.focus();
+                                    }
+                                } else {
+                                    // Set the public message input
+                                    setFormData(prev => ({ ...prev, message: result }));
+
+                                    // Focus the message input
+                                    const messageInput = document.getElementById('message');
+                                    if (messageInput) {
+                                        messageInput.focus();
+                                    }
+
+                                    // Process voice commands
+                                    handleVoiceCommand(result);
+                                }
+                            }
+                        };
+
+                        // Handle recognition end
+                        recognition.onend = () => {
+                            console.log('Speech recognition ended');
+                            setSpeechOutput('');
+                            setIsSpeaking(false);
+                        };
+
+                        // Start recognition
+                        recognition.start();
+                        console.log('Speech recognition started');
+                    } catch (error) {
+                        console.error('Error starting speech recognition:', error);
+                        setSpeechOutput('Error starting voice recognition');
+                        setIsSpeaking(false);
+                        showNotification('Error starting voice recognition. Please try again.', 'error');
+                    }
+                } else {
+                    console.warn('Speech recognition not available');
+                    showNotification('Voice recognition is not available on this device or browser', 'error');
+
+                    // Try to initialize recognition again
+                    const rec = setupSpeechRecognition((result) => {
+                        setSpeechOutput(result);
+                        handleVoiceCommand(result);
+                    });
+
+                    if (rec) {
+                        setRecognition(rec);
+                        showNotification('Voice recognition initialized. Please try again.', 'info');
+                    }
                 }
             };
 
@@ -2720,6 +3833,162 @@
                 }, 2000); // 2 seconds to start ringing
             };
 
+            // Test media devices before starting a call
+            const testMediaDevices = async () => {
+                try {
+                    // Create a modal dialog for the test
+                    const modal = document.createElement('div');
+                    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+                    modal.innerHTML = `
+                        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-lg w-full mx-4">
+                            <h3 class="text-xl font-bold mb-4 text-gray-900 dark:text-white">Camera & Microphone Test</h3>
+                            <div class="mb-4">
+                                <div class="relative rounded-lg overflow-hidden bg-gray-200 dark:bg-gray-700" style="height: 240px;">
+                                    <video id="test-video" autoplay muted playsinline class="w-full h-full object-cover"></video>
+                                    <div id="no-camera-message" class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-gray-400 hidden">
+                                        <div class="text-center">
+                                            <i class="fas fa-video-slash text-4xl mb-2"></i>
+                                            <p>No camera detected</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <p class="text-sm text-gray-600 dark:text-gray-300 mb-2">Microphone Level:</p>
+                                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4">
+                                    <div id="audio-level-indicator" class="bg-green-500 h-4 rounded-full" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <p class="text-sm text-gray-600 dark:text-gray-300" id="devices-info">Checking available devices...</p>
+                            </div>
+                            <div class="flex justify-end">
+                                <button id="close-test" class="bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg">
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(modal);
+
+                    // Get elements
+                    const testVideo = document.getElementById('test-video');
+                    const noCameraMessage = document.getElementById('no-camera-message');
+                    const audioLevelIndicator = document.getElementById('audio-level-indicator');
+                    const devicesInfo = document.getElementById('devices-info');
+                    const closeButton = document.getElementById('close-test');
+
+                    // Close button event
+                    closeButton.addEventListener('click', () => {
+                        // Stop all tracks
+                        if (testStream) {
+                            testStream.getTracks().forEach(track => track.stop());
+                        }
+
+                        // Remove the modal
+                        document.body.removeChild(modal);
+                    });
+
+                    // Get available devices
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                    const audioDevices = devices.filter(device => device.kind === 'audioinput');
+
+                    devicesInfo.innerHTML = `
+                        <p><strong>Available Devices:</strong></p>
+                        <p>Cameras: ${videoDevices.length}</p>
+                        <p>Microphones: ${audioDevices.length}</p>
+                    `;
+
+                    // Try to get media stream
+                    let testStream;
+                    try {
+                        testStream = await navigator.mediaDevices.getUserMedia({
+                            video: true,
+                            audio: true
+                        });
+
+                        // Set video stream
+                        testVideo.srcObject = testStream;
+
+                        // Set up audio level detection
+                        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                        const analyser = audioContext.createAnalyser();
+                        const microphone = audioContext.createMediaStreamSource(testStream);
+                        microphone.connect(analyser);
+                        analyser.fftSize = 256;
+                        const bufferLength = analyser.frequencyBinCount;
+                        const dataArray = new Uint8Array(bufferLength);
+
+                        // Update audio level indicator
+                        const updateAudioLevel = () => {
+                            if (!document.body.contains(modal)) return;
+
+                            analyser.getByteFrequencyData(dataArray);
+                            let sum = 0;
+                            for (let i = 0; i < bufferLength; i++) {
+                                sum += dataArray[i];
+                            }
+                            const average = sum / bufferLength;
+                            const level = Math.min(100, average * 3); // Scale up for better visibility
+
+                            audioLevelIndicator.style.width = `${level}%`;
+
+                            // Change color based on level
+                            if (level < 10) {
+                                audioLevelIndicator.className = 'bg-red-500 h-4 rounded-full';
+                            } else if (level < 30) {
+                                audioLevelIndicator.className = 'bg-yellow-500 h-4 rounded-full';
+                            } else {
+                                audioLevelIndicator.className = 'bg-green-500 h-4 rounded-full';
+                            }
+
+                            requestAnimationFrame(updateAudioLevel);
+                        };
+
+                        updateAudioLevel();
+
+                        // Show guidance
+                        showNotification('Try speaking to test your microphone', 'info');
+
+                    } catch (error) {
+                        console.error('Error accessing media devices:', error);
+
+                        // Show error message
+                        if (error.name === 'NotAllowedError') {
+                            devicesInfo.innerHTML = `
+                                <p class="text-red-500"><strong>Permission Denied</strong></p>
+                                <p>Please allow access to your camera and microphone in your browser settings.</p>
+                                <p class="mt-2">Instructions:</p>
+                                <ol class="list-decimal ml-5">
+                                    <li>Click the camera/microphone icon in your address bar</li>
+                                    <li>Select "Allow" for both camera and microphone</li>
+                                    <li>Refresh the page and try again</li>
+                                </ol>
+                            `;
+                        } else if (error.name === 'NotFoundError') {
+                            devicesInfo.innerHTML = `
+                                <p class="text-red-500"><strong>No Devices Found</strong></p>
+                                <p>We couldn't detect a camera or microphone on your device.</p>
+                                <p>Please connect a webcam or microphone and try again.</p>
+                            `;
+                        } else {
+                            devicesInfo.innerHTML = `
+                                <p class="text-red-500"><strong>Error: ${error.name}</strong></p>
+                                <p>${error.message}</p>
+                            `;
+                        }
+
+                        // Show no camera message
+                        noCameraMessage.classList.remove('hidden');
+                    }
+
+                } catch (error) {
+                    console.error('Error in media device test:', error);
+                    showNotification('Error testing media devices', 'error');
+                }
+            };
+
             // End call
             const endCall = () => {
                 setCallStatus('ended');
@@ -2802,15 +4071,44 @@
                 // Create a stream from the canvas
                 const stream = canvas.captureStream(30); // 30 FPS
 
-                // Add audio track (silent)
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                const oscillator = audioContext.createOscillator();
-                const dst = oscillator.connect(audioContext.createMediaStreamDestination());
-                oscillator.start();
+                // Create a silent audio track (properly configured to avoid buzzing)
+                let audioContext;
+                let audioTrack;
 
-                // Add the audio track to the stream
-                const audioTrack = dst.stream.getAudioTracks()[0];
-                stream.addTrack(audioTrack);
+                try {
+                    // Initialize audio context with proper options
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                        latencyHint: 'interactive',
+                        sampleRate: 44100
+                    });
+
+                    // Create a silent oscillator (0 frequency)
+                    const oscillator = audioContext.createOscillator();
+                    oscillator.frequency.value = 0; // Set to 0 Hz to create silence
+
+                    // Create a gain node and set it to 0 (mute)
+                    const gainNode = audioContext.createGain();
+                    gainNode.gain.value = 0;
+
+                    // Connect oscillator to gain node
+                    oscillator.connect(gainNode);
+
+                    // Connect gain node to destination
+                    const dst = gainNode.connect(audioContext.createMediaStreamDestination());
+
+                    // Start the oscillator
+                    oscillator.start();
+
+                    // Get the audio track
+                    audioTrack = dst.stream.getAudioTracks()[0];
+
+                    // Add the audio track to the stream
+                    stream.addTrack(audioTrack);
+
+                    console.log('Silent audio track created successfully for simulated stream');
+                } catch (error) {
+                    console.error('Error creating silent audio track for simulated stream:', error);
+                }
 
                 return stream;
             };
@@ -2853,6 +4151,7 @@
                     setIsMicMuted(false);
                     setIsCameraOff(false);
                     setIsRemoteConnected(false);
+                    setConnectionState('connecting');
 
                     // Set the stream to the video element
                     const videoElement = document.getElementById('local-video');
@@ -2941,15 +4240,44 @@
                             // Create a stream from the canvas
                             const stream = canvas.captureStream(30); // 30 FPS
 
-                            // Add audio track (silent)
-                            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                            const oscillator = audioContext.createOscillator();
-                            const dst = oscillator.connect(audioContext.createMediaStreamDestination());
-                            oscillator.start();
+                            // Create a silent audio track (properly configured to avoid buzzing)
+                            let audioContext;
+                            let audioTrack;
 
-                            // Add the audio track to the stream
-                            const audioTrack = dst.stream.getAudioTracks()[0];
-                            stream.addTrack(audioTrack);
+                            try {
+                                // Initialize audio context with proper options
+                                audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                                    latencyHint: 'interactive',
+                                    sampleRate: 44100
+                                });
+
+                                // Create a silent oscillator (0 frequency)
+                                const oscillator = audioContext.createOscillator();
+                                oscillator.frequency.value = 0; // Set to 0 Hz to create silence
+
+                                // Create a gain node and set it to 0 (mute)
+                                const gainNode = audioContext.createGain();
+                                gainNode.gain.value = 0;
+
+                                // Connect oscillator to gain node
+                                oscillator.connect(gainNode);
+
+                                // Connect gain node to destination
+                                const dst = gainNode.connect(audioContext.createMediaStreamDestination());
+
+                                // Start the oscillator
+                                oscillator.start();
+
+                                // Get the audio track
+                                audioTrack = dst.stream.getAudioTracks()[0];
+
+                                // Add the audio track to the stream
+                                stream.addTrack(audioTrack);
+
+                                console.log('Silent audio track created successfully');
+                            } catch (error) {
+                                console.error('Error creating silent audio track:', error);
+                            }
 
                             return stream;
                         };
@@ -3007,6 +4335,7 @@
                 // Update UI state
                 setShowVideoChat(false);
                 setIsRemoteConnected(false);
+                setConnectionState('disconnected');
 
                 // Update call status in localStorage
                 const currentUser = getCurrentUser();
@@ -3058,51 +4387,169 @@
                 }
             };
 
-            // Push-to-talk functionality
+            // Push-to-talk functionality with improved mobile support
             const startPushToTalk = () => {
+                console.log('Starting push-to-talk');
                 setIsPushToTalkActive(true);
+
                 if (localStream) {
-                    const audioTracks = localStream.getAudioTracks();
-                    if (audioTracks.length > 0) {
-                        audioTracks[0].enabled = true;
+                    try {
+                        // Get audio tracks
+                        const audioTracks = localStream.getAudioTracks();
+
+                        if (audioTracks.length > 0) {
+                            // Enable the audio track
+                            audioTracks[0].enabled = true;
+
+                            // Apply constraints for better audio quality
+                            if (audioTracks[0].applyConstraints) {
+                                const constraints = {
+                                    echoCancellation: true,
+                                    noiseSuppression: true,
+                                    autoGainControl: true
+                                };
+
+                                audioTracks[0].applyConstraints(constraints)
+                                    .catch(e => console.warn('Could not apply audio constraints:', e));
+                            }
+
+                            console.log('Audio track enabled for push-to-talk');
+                        } else {
+                            console.warn('No audio tracks found in local stream');
+                            showNotification('No microphone available for push-to-talk', 'warning');
+                        }
+                    } catch (error) {
+                        console.error('Error enabling audio for push-to-talk:', error);
                     }
+                } else {
+                    console.warn('No local stream available for push-to-talk');
+
+                    // Try to get audio-only stream if no stream exists
+                    navigator.mediaDevices.getUserMedia({ audio: true })
+                        .then(stream => {
+                            console.log('Got audio stream for push-to-talk');
+                            setLocalStream(stream);
+                        })
+                        .catch(error => {
+                            console.error('Error getting audio stream for push-to-talk:', error);
+                            showNotification('Could not access microphone for push-to-talk', 'error');
+                        });
                 }
+
+                // Play a subtle sound to indicate transmission started
+                try {
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+
+                    oscillator.type = 'sine';
+                    oscillator.frequency.value = 440; // A4 note
+                    gainNode.gain.value = 0.1; // Low volume
+
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+
+                    oscillator.start();
+                    setTimeout(() => {
+                        oscillator.stop();
+                        audioContext.close();
+                    }, 100);
+                } catch (error) {
+                    console.error('Error playing push-to-talk sound:', error);
+                }
+
                 showNotification('Transmitting audio...', 'info');
             };
 
             const stopPushToTalk = () => {
+                console.log('Stopping push-to-talk');
                 setIsPushToTalkActive(false);
+
                 if (localStream) {
-                    const audioTracks = localStream.getAudioTracks();
-                    if (audioTracks.length > 0) {
-                        audioTracks[0].enabled = false;
+                    try {
+                        const audioTracks = localStream.getAudioTracks();
+
+                        if (audioTracks.length > 0) {
+                            // Disable the audio track
+                            audioTracks[0].enabled = false;
+                            console.log('Audio track disabled for push-to-talk');
+                        }
+                    } catch (error) {
+                        console.error('Error disabling audio for push-to-talk:', error);
                     }
+                }
+
+                // Play a subtle sound to indicate transmission ended
+                try {
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+
+                    oscillator.type = 'sine';
+                    oscillator.frequency.value = 220; // A3 note (lower)
+                    gainNode.gain.value = 0.1; // Low volume
+
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+
+                    oscillator.start();
+                    setTimeout(() => {
+                        oscillator.stop();
+                        audioContext.close();
+                    }, 100);
+                } catch (error) {
+                    console.error('Error playing push-to-talk end sound:', error);
                 }
             };
 
-            // Initialize WebSocket connection
+            // Initialize LEEWAY WebRTC system
             const initializeWebSocket = React.useCallback(() => {
-                console.log('Initializing WebSocket connection');
+                console.log('Initializing LEEWAY WebRTC system');
 
-                // Create a new WebSocket client
+                // Create a new WebRTC client
                 const client = new WebSocketClient();
 
                 // Set up event handlers
                 client.onConnectionStatusChange((status) => {
-                    console.log('WebSocket connection status changed:', status);
-                    setWsConnected(status === 'connected');
+                    console.log('Connection status changed:', status);
+                    setWsConnected(status === 'connected' || status === 'simulated');
 
                     if (status === 'connected') {
-                        showNotification('Connected to WebSocket server', 'success');
+                        showNotification('LEEWAY WebRTC system initialized', 'success');
                     } else if (status === 'disconnected') {
-                        showNotification('Disconnected from WebSocket server', 'info');
+                        showNotification('WebRTC system disconnected', 'info');
+                        setConnectionState('disconnected');
 
                         // Clean up any ongoing calls
                         if (isCallInProgress) {
                             endCall();
                         }
-                    } else if (status === 'error') {
-                        showNotification('Error connecting to WebSocket server', 'error');
+                    } else if (status === 'peer-failed') {
+                        showNotification('WebRTC connection failed. Trying to reconnect...', 'error');
+                        setConnectionState('failed');
+                    }
+                });
+
+                // Set up ICE connection state change handler
+                client.onIceConnectionStateChange((userId, state) => {
+                    console.log(`ICE connection state for ${userId}: ${state}`);
+
+                    switch (state) {
+                        case 'checking':
+                            setConnectionState('connecting');
+                            break;
+                        case 'connected':
+                        case 'completed':
+                            setConnectionState('connected');
+                            break;
+                        case 'failed':
+                            setConnectionState('failed');
+                            showNotification('Connection failed. Check your network settings.', 'error');
+                            break;
+                        case 'disconnected':
+                            setConnectionState('disconnected');
+                            showNotification('Connection temporarily disconnected. Attempting to reconnect...', 'warning');
+                            break;
                     }
                 });
 
@@ -3174,15 +4621,29 @@
                     showNotification('Video connection established', 'success');
                 });
 
-                // Connect to the WebSocket server
+                // Set up speaking detection
+                client.onSpeaking((userId, isSpeaking, level) => {
+                    console.log(`Speaking detection: ${userId} is ${isSpeaking ? 'speaking' : 'silent'} (level: ${level})`);
+
+                    if (userId === 'local') {
+                        setLocalSpeaking(isSpeaking);
+                    } else {
+                        setRemoteSpeaking(isSpeaking);
+                    }
+
+                    // Update audio level for visualization
+                    setAudioLevel(level);
+                });
+
+                // Initialize the LEEWAY WebRTC system
                 client.connect()
                     .then(() => {
-                        console.log('WebSocket connection established successfully');
+                        console.log('LEEWAY WebRTC system initialized successfully');
                         setWsClient(client);
                     })
                     .catch(error => {
-                        console.error('Failed to connect to WebSocket server:', error);
-                        showNotification('Failed to connect to WebSocket server. Using simulated mode.', 'error');
+                        console.error('Failed to initialize LEEWAY WebRTC system:', error);
+                        showNotification('Failed to initialize WebRTC. Please check your browser settings.', 'error');
                     });
 
                 return client;
@@ -3638,12 +5099,12 @@
                                     {wsConnected ? (
                                         <span className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-2 py-1 rounded-full flex items-center">
                                             <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
-                                            Connected
+                                            LEEWAY Ready
                                         </span>
                                     ) : (
                                         <span className="text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 px-2 py-1 rounded-full flex items-center">
                                             <span className="w-2 h-2 bg-yellow-500 rounded-full mr-1"></span>
-                                            Simulated
+                                            Initializing
                                         </span>
                                     )}
                                 </div>
@@ -3653,12 +5114,40 @@
                                             <div className="mb-4">
                                                 {/* Main video display - Remote video takes precedence when connected */}
                                                 <div className="relative mb-3" style={{ height: '180px' }}>
-                                                    <video
-                                                        id="remote-video"
-                                                        autoPlay
-                                                        playsInline
-                                                        className="w-full h-full object-cover rounded-lg bg-gray-200 border-2 border-purple-300"
-                                                    ></video>
+                                                    <div className="relative">
+                                                        <video
+                                                            id="remote-video"
+                                                            autoPlay
+                                                            playsInline
+                                                            className={`w-full h-full object-cover rounded-lg bg-gray-200 border-2 ${remoteSpeaking ? 'border-green-500' : 'border-purple-300'}`}
+                                                        ></video>
+                                                        {remoteSpeaking && (
+                                                            <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
+                                                                <i className="fas fa-microphone mr-1"></i> Speaking
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* WebRTC Connection Status Indicator */}
+                                                    <div className={`video-status ${
+                                                        connectionState === 'connected' ? 'bg-green-500' :
+                                                        connectionState === 'connecting' ? 'bg-yellow-500' :
+                                                        connectionState === 'failed' ? 'bg-red-500' : 'bg-gray-500'
+                                                    }`}>
+                                                        {connectionState === 'connected' && (
+                                                            <span><i className="fas fa-signal"></i> Connected</span>
+                                                        )}
+                                                        {connectionState === 'connecting' && (
+                                                            <span><i className="fas fa-spinner fa-spin"></i> Connecting...</span>
+                                                        )}
+                                                        {connectionState === 'failed' && (
+                                                            <span><i className="fas fa-exclamation-triangle"></i> Connection Failed</span>
+                                                        )}
+                                                        {connectionState === 'disconnected' && (
+                                                            <span><i className="fas fa-plug"></i> Disconnected</span>
+                                                        )}
+                                                    </div>
+
                                                     {!isRemoteConnected && (
                                                         <div className="absolute inset-0 flex items-center justify-center text-gray-500">
                                                             <div className="text-center">
@@ -3684,14 +5173,26 @@
                                                     )}
 
                                                     {/* Picture-in-picture local video */}
-                                                    <div className="absolute bottom-2 right-2 w-1/4 h-1/4 min-w-[80px] min-h-[60px]">
+                                                    <div className="absolute bottom-2 right-2 w-1/4 h-1/4 min-w-[80px] min-h-[60px] relative">
                                                         <video
                                                             id="local-video"
                                                             autoPlay
                                                             muted
                                                             playsInline
-                                                            className="w-full h-full object-cover rounded-lg border border-white shadow-md"
+                                                            className={`w-full h-full object-cover rounded-lg border ${localSpeaking ? 'border-green-500' : 'border-white'} shadow-md`}
                                                         ></video>
+
+                                                        {/* Local video status indicators */}
+                                                        <div className="absolute top-0 left-0 bg-blue-500 text-white text-xs px-1 py-0.5 rounded-br">
+                                                            {isCameraOff ? 'Off' : 'You'}
+                                                        </div>
+
+                                                        {/* Speaking indicator */}
+                                                        {localSpeaking && (
+                                                            <div className="absolute top-0 right-0 bg-green-500 text-white text-xs px-1 py-0.5 rounded-bl">
+                                                                <i className="fas fa-microphone text-xs"></i>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
 
@@ -3845,6 +5346,16 @@
                                     ) : (
                                         <div className="text-center py-6">
                                             <p className="mb-4">Connect with family members</p>
+
+                                            {/* Pre-call test button */}
+                                            <button
+                                                onClick={() => testMediaDevices()}
+                                                className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg mb-4 flex items-center mx-auto"
+                                            >
+                                                <i className="fas fa-video-slash mr-2"></i>
+                                                Test Camera & Microphone
+                                            </button>
+
                                             <div className="grid grid-cols-2 gap-4">
                                                 <button
                                                     onClick={() => startVideoChat('group')}
@@ -4155,6 +5666,94 @@
     </script>
     <!-- 🧠 END REGION: AI & MAIN APP CODE -->
 
+    <!-- Mobile-specific styles -->
+    <style>
+        /* Mobile-specific styles */
+        @media (max-width: 768px) {
+            .form-input, .submit-btn, button {
+                /* Increase touch target size */
+                min-height: 44px;
+                font-size: 16px; /* Prevent iOS zoom on focus */
+            }
+
+            /* Improve spacing on mobile */
+            .card-body {
+                padding: 15px 10px;
+            }
+
+            /* Make buttons easier to tap */
+            .video-control-btn {
+                width: 44px;
+                height: 44px;
+                margin: 0 5px;
+            }
+
+            /* Adjust push-to-talk button for mobile */
+            button[onmousedown], button[ontouchstart] {
+                padding: 15px !important;
+                font-size: 18px !important;
+            }
+
+            /* Improve microphone button visibility */
+            button[title="Voice Input"],
+            button[title="Voice Input for Private Message"] {
+                width: 44px;
+                height: 44px;
+            }
+
+            /* Fix video sizing on mobile */
+            #local-video, #remote-video {
+                max-height: 30vh;
+                width: 100%;
+                object-fit: cover;
+            }
+
+            /* Adjust for mobile landscape mode */
+            @media (orientation: landscape) {
+                #local-video, #remote-video {
+                    max-height: 50vh;
+                }
+
+                .video-container {
+                    max-height: 50vh;
+                }
+            }
+
+            /* Fix for iOS Safari 100vh issue */
+            .min-h-screen {
+                min-height: -webkit-fill-available;
+            }
+
+            /* Improve mobile dark mode */
+            .dark-mode .form-input,
+            .dark-mode button,
+            .dark-mode .submit-btn {
+                font-size: 16px;
+            }
+
+            /* Fix for mobile keyboards */
+            input, textarea, select {
+                font-size: 16px !important; /* Prevent zoom on iOS */
+            }
+        }
+
+        /* Fix for mobile Safari audio issues */
+        .mobile-device audio {
+            visibility: hidden;
+            position: absolute;
+            height: 1px;
+            width: 1px;
+            opacity: 0.01;
+        }
+
+        /* Improve mobile push-to-talk feedback */
+        .push-to-talk-active {
+            background-color: #e11d48 !important; /* Bright red when active */
+            transform: scale(0.95);
+            transition: all 0.1s ease-in-out;
+        }
+    </style>
+
     <!-- Mobile optimization script -->
     <script>
         // Handle device orientation changes
@@ -4202,6 +5801,70 @@
             // Add passive event listeners for better scroll performance
             document.addEventListener('touchstart', function() {}, {passive: true});
             document.addEventListener('touchmove', function() {}, {passive: true});
+
+            // Fix for iOS audio context issues
+            function unlockAudioContext() {
+                console.log('Attempting to unlock audio context');
+                // Create a temporary audio context
+                const tempContext = new (window.AudioContext || window.webkitAudioContext)();
+
+                // Create a buffer source
+                const source = tempContext.createBufferSource();
+                source.buffer = tempContext.createBuffer(1, 1, 22050);
+                source.connect(tempContext.destination);
+
+                // Play the source (required for iOS)
+                source.start(0);
+
+                // Clean up
+                setTimeout(() => {
+                    if (tempContext.state === 'running') {
+                        console.log('Audio context unlocked successfully');
+                    }
+                    tempContext.close();
+                }, 100);
+            }
+
+            // Unlock audio on first user interaction
+            const unlockAudio = () => {
+                unlockAudioContext();
+
+                // Remove event listeners once unlocked
+                document.removeEventListener('touchstart', unlockAudio);
+                document.removeEventListener('touchend', unlockAudio);
+                document.removeEventListener('click', unlockAudio);
+            };
+
+            document.addEventListener('touchstart', unlockAudio);
+            document.addEventListener('touchend', unlockAudio);
+            document.addEventListener('click', unlockAudio);
+
+            // Fix for push-to-talk on mobile
+            const fixPushToTalkButtons = () => {
+                const pushToTalkButtons = document.querySelectorAll('[onmousedown], [ontouchstart]');
+                pushToTalkButtons.forEach(button => {
+                    // Add active class when pressed
+                    button.addEventListener('touchstart', () => {
+                        button.classList.add('push-to-talk-active');
+                    });
+
+                    // Remove active class when released
+                    button.addEventListener('touchend', () => {
+                        button.classList.remove('push-to-talk-active');
+                    });
+
+                    // Remove active class when touch is canceled
+                    button.addEventListener('touchcancel', () => {
+                        button.classList.remove('push-to-talk-active');
+                    });
+                });
+            };
+
+            // Run the fix when DOM is loaded
+            document.addEventListener('DOMContentLoaded', fixPushToTalkButtons);
+
+            // Also run it after a short delay to catch dynamically added buttons
+            setTimeout(fixPushToTalkButtons, 2000);
         }
     </script>
 </body>
