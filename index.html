@@ -766,14 +766,26 @@
             // WebRTC
             this.peerConnections = {}; // userId -> RTCPeerConnection
             this.localStream = null;
+
+            // Enhanced ICE servers configuration with multiple STUN servers and fallback TURN servers
             this.iceServers = [
                 { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' },
+                { urls: 'stun:stun4.l.google.com:19302' },
                 { urls: 'stun:stun.stunprotocol.org:3478' },
-                // Add TURN servers for better NAT traversal in production
+                { urls: 'stun:stun.ekiga.net:3478' },
+                // Free TURN servers (limited capacity but should work for testing)
                 {
-                    urls: 'turn:global.turn.twilio.com:3478?transport=udp',
-                    username: 'leeway_system',
-                    credential: 'leeway_credential'
+                    urls: 'turn:numb.viagenie.ca',
+                    username: 'webrtc@live.com',
+                    credential: 'muazkh'
+                },
+                {
+                    urls: 'turn:turn.anyfirewall.com:443?transport=tcp',
+                    username: 'webrtc',
+                    credential: 'webrtc'
                 }
             ];
 
@@ -782,7 +794,7 @@
 
             // LEEWAY system info
             this.systemName = 'LEEWAY WebRTC';
-            this.systemVersion = '5.0';
+            this.systemVersion = '5.1';
 
             // Secure communication
             this.sessionId = SecurePeerManager.generateSessionId();
@@ -791,6 +803,13 @@
 
             // Data channels for secure messaging
             this.dataChannels = {}; // userId -> RTCDataChannel
+
+            // Audio level detection
+            this.audioContext = null;
+            this.audioAnalyser = null;
+            this.audioDataArray = null;
+            this.audioDetectionInterval = null;
+            this.speakingThreshold = 15; // Threshold for speaking detection
 
             // Callbacks
             this.onConnectionStatusChangeCallback = null;
@@ -802,6 +821,7 @@
 
             console.log(`${this.systemName} v${this.systemVersion} initialized with secure P2P mode`);
             console.log(`Session ID: ${this.sessionId}`);
+            console.log('Using enhanced ICE server configuration for better cross-platform compatibility');
 
             // Immediately notify that we're connected
             setTimeout(() => {
@@ -809,6 +829,28 @@
                     this.onConnectionStatusChangeCallback('connected');
                 }
             }, 100);
+
+            // Initialize audio context for speaking detection if supported
+            this._initAudioContext();
+        }
+
+        /**
+         * Initialize audio context for speaking detection
+         * @private
+         */
+        _initAudioContext() {
+            try {
+                // Check if AudioContext is supported
+                if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
+                    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                    this.audioContext = new AudioContextClass();
+                    console.log('Audio context initialized for speaking detection');
+                } else {
+                    console.warn('AudioContext not supported in this browser');
+                }
+            } catch (error) {
+                console.error('Error initializing audio context:', error);
+            }
         }
 
         /**
@@ -1156,6 +1198,83 @@
          */
         addLocalStream(stream) {
             this.localStream = stream;
+
+            // Set up audio level detection if we have audio tracks
+            if (stream && stream.getAudioTracks().length > 0) {
+                this._setupAudioLevelDetection(stream);
+            }
+        }
+
+        /**
+         * Set up audio level detection for speaking indicators
+         * @param {MediaStream} stream - Media stream to monitor
+         * @private
+         */
+        _setupAudioLevelDetection(stream) {
+            try {
+                // Clean up any existing audio detection
+                if (this.audioDetectionInterval) {
+                    clearInterval(this.audioDetectionInterval);
+                    this.audioDetectionInterval = null;
+                }
+
+                // Check if audio context is available
+                if (!this.audioContext) {
+                    this._initAudioContext();
+                    if (!this.audioContext) {
+                        console.warn('Cannot set up audio level detection: AudioContext not available');
+                        return;
+                    }
+                }
+
+                // Create analyzer
+                this.audioAnalyser = this.audioContext.createAnalyser();
+                this.audioAnalyser.fftSize = 256;
+                this.audioDataArray = new Uint8Array(this.audioAnalyser.frequencyBinCount);
+
+                // Connect audio source to analyzer
+                const microphone = this.audioContext.createMediaStreamSource(stream);
+                microphone.connect(this.audioAnalyser);
+
+                // Start monitoring audio levels
+                let isSpeaking = false;
+                let speakingCounter = 0;
+
+                this.audioDetectionInterval = setInterval(() => {
+                    // Get audio data
+                    this.audioAnalyser.getByteFrequencyData(this.audioDataArray);
+
+                    // Calculate average volume
+                    let sum = 0;
+                    for (let i = 0; i < this.audioDataArray.length; i++) {
+                        sum += this.audioDataArray[i];
+                    }
+                    const average = sum / this.audioDataArray.length;
+
+                    // Determine if speaking
+                    const newIsSpeaking = average > this.speakingThreshold;
+
+                    // Add debounce to prevent rapid changes
+                    if (newIsSpeaking !== isSpeaking) {
+                        speakingCounter++;
+                        if (speakingCounter >= 3) { // Require 3 consecutive samples to change state
+                            isSpeaking = newIsSpeaking;
+                            speakingCounter = 0;
+
+                            // Notify callback
+                            if (this.onSpeakingCallback) {
+                                this.onSpeakingCallback('local', isSpeaking, average);
+                            }
+                        }
+                    } else {
+                        speakingCounter = 0;
+                    }
+                }, 100); // Check every 100ms
+
+                console.log('Audio level detection set up successfully');
+            } catch (error) {
+                console.error('Error setting up audio level detection:', error);
+            }
         }
 
         /**
@@ -3164,6 +3283,17 @@
                     // Add to localStorage
                     await messagesCollection.add(message);
 
+                    // Immediately update the messages state to show the new message
+                    setMessages(prevMessages => [...prevMessages, message]);
+
+                    // Scroll to bottom of message board
+                    setTimeout(() => {
+                        const messageBoard = document.querySelector('.message-board');
+                        if (messageBoard) {
+                            messageBoard.scrollTop = messageBoard.scrollHeight;
+                        }
+                    }, 100);
+
                     // Reset message form
                     setFormData(prev => ({ ...prev, message: '' }));
 
@@ -4161,22 +4291,65 @@
                         audio: true
                     };
 
-                    const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                    setLocalStream(stream);
-                    // Create a new variable instead of modifying the read-only one
-                    const newLocalStream = stream;
-                    setShowVideoChat(true);
+                    console.log('Requesting media with constraints:', constraints);
 
-                    // Reset states
-                    setIsMicMuted(false);
-                    setIsCameraOff(false);
-                    setIsRemoteConnected(false);
-                    setConnectionState('connecting');
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                        console.log('Got media stream:', stream);
+                        console.log('Video tracks:', stream.getVideoTracks().length);
+                        console.log('Audio tracks:', stream.getAudioTracks().length);
 
-                    // Set the stream to the video element
-                    const videoElement = document.getElementById('local-video');
-                    if (videoElement && stream.getVideoTracks().length > 0) {
-                        videoElement.srcObject = stream;
+                        setLocalStream(stream);
+
+                        // Reset states
+                        setIsMicMuted(false);
+                        setIsCameraOff(false);
+                        setIsRemoteConnected(false);
+                        setConnectionState('connecting');
+
+                        // Set the stream to the video element
+                        const videoElement = document.getElementById('local-video');
+                        if (videoElement) {
+                            console.log('Setting stream to local video element');
+                            videoElement.srcObject = stream;
+                            videoElement.muted = true; // Mute local video to prevent feedback
+
+                            // Force play the video
+                            videoElement.play()
+                                .then(() => console.log('Local video playing'))
+                                .catch(e => {
+                                    console.error('Error playing local video:', e);
+                                    // Try again with user interaction
+                                    showNotification('Click anywhere to enable your camera', 'info');
+                                    document.body.addEventListener('click', () => {
+                                        videoElement.play()
+                                            .then(() => console.log('Local video playing after user interaction'))
+                                            .catch(e => console.error('Still cannot play local video:', e));
+                                    }, { once: true });
+                                });
+                        } else {
+                            console.error('Local video element not found');
+                        }
+                    } catch (mediaError) {
+                        console.error('Error accessing media devices:', mediaError);
+                        showNotification(`Camera/microphone access error: ${mediaError.message}. Please check your device permissions.`, 'error');
+
+                        // Try with just audio as fallback
+                        if (constraints.video && type !== 'audio') {
+                            showNotification('Trying with audio only...', 'info');
+                            try {
+                                const audioOnlyStream = await navigator.mediaDevices.getUserMedia({
+                                    video: false,
+                                    audio: true
+                                });
+                                setLocalStream(audioOnlyStream);
+                                setIsCameraOff(true);
+                                showNotification('Connected with audio only. Video is unavailable.', 'warning');
+                            } catch (audioError) {
+                                console.error('Error accessing audio:', audioError);
+                                showNotification('Could not access microphone. Please check permissions.', 'error');
+                            }
+                        }
                     }
 
                     // Create a call room in localStorage
