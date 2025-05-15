@@ -767,7 +767,7 @@
             this.peerConnections = {}; // userId -> RTCPeerConnection
             this.localStream = null;
 
-            // Enhanced ICE servers configuration with multiple STUN servers and fallback TURN servers
+            // Enhanced ICE servers configuration with more reliable STUN/TURN servers
             this.iceServers = [
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },
@@ -775,7 +775,7 @@
                 { urls: 'stun:stun3.l.google.com:19302' },
                 { urls: 'stun:stun4.l.google.com:19302' },
                 { urls: 'stun:stun.stunprotocol.org:3478' },
-                { urls: 'stun:stun.ekiga.net:3478' },
+                { urls: 'stun:global.stun.twilio.com:3478?transport=udp' },
                 // Free TURN servers (limited capacity but should work for testing)
                 {
                     urls: 'turn:numb.viagenie.ca',
@@ -786,6 +786,11 @@
                     urls: 'turn:turn.anyfirewall.com:443?transport=tcp',
                     username: 'webrtc',
                     credential: 'webrtc'
+                },
+                {
+                    urls: 'turn:global.turn.twilio.com:3478?transport=udp',
+                    username: 'YOUR_TWILIO_USERNAME', // Replace with actual credentials in production
+                    credential: 'YOUR_TWILIO_CREDENTIAL'
                 }
             ];
 
@@ -2412,7 +2417,7 @@
             }, 5000);
         };
 
-        // Add function to send SMS notification
+        // Add function to send SMS notification with enhanced visibility
         const sendSMSNotification = async (message) => {
             try {
                 // IMPORTANT: In a production environment, you should NEVER include API keys in client-side code
@@ -2431,7 +2436,13 @@
                 // Show notification in the app using the global notification function
                 globalNotify(`Text message sent to admin: ${message}`, 'success');
 
-                // Create a more detailed SMS simulation popup
+                // Remove any existing SMS notifications to prevent stacking
+                const existingNotifications = document.querySelectorAll('.sms-simulation');
+                existingNotifications.forEach(notification => {
+                    notification.remove();
+                });
+
+                // Create a more detailed SMS simulation popup with enhanced visibility
                 const smsElement = document.createElement('div');
                 smsElement.className = 'sms-simulation';
                 smsElement.innerHTML = `
@@ -2470,11 +2481,12 @@
                             width: 320px;
                             background-color: #f8f9fa;
                             border-radius: 12px;
-                            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-                            z-index: 1000;
+                            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                            z-index: 10000;
                             overflow: hidden;
                             animation: sms-slide-in 0.3s ease-out;
                             font-family: 'Poppins', sans-serif;
+                            border: 2px solid #6b46c1;
                         }
 
                         @keyframes sms-slide-in {
@@ -2919,6 +2931,10 @@
             const [remoteSpeaking, setRemoteSpeaking] = React.useState(false); // Whether the remote user is speaking
             const [audioLevel, setAudioLevel] = React.useState(0); // Audio level for visualization
 
+            // Refs for video elements
+            const localVideoRef = React.useRef(null);
+            const remoteVideoRef = React.useRef(null);
+
             // WebSocket states
             const [wsClient, setWsClient] = React.useState(null);
             const [wsConnected, setWsConnected] = React.useState(false);
@@ -3030,6 +3046,83 @@
                     { id: 2, sender: 'Me', content: 'I can\'t wait to see you all!', timestamp: new Date(Date.now() - 1800000).toISOString() }
                 ]);
             }, []);
+
+            // Effect for attaching local stream to video element
+            React.useEffect(() => {
+                if (localStream && localVideoRef.current) {
+                    console.log('Attaching localStream to localVideoRef:', localStream);
+                    localVideoRef.current.srcObject = localStream;
+                    localVideoRef.current.muted = true; // Mute local video to prevent feedback
+
+                    localVideoRef.current.play().catch(e => {
+                        console.error("Error playing local video:", e);
+                        if (e.name === "NotAllowedError") {
+                            showNotification("Click anywhere to enable your camera/audio.", "info");
+                            // Add a one-time click listener to the body to attempt play again
+                            const playOnInteraction = () => {
+                                if (localVideoRef.current) {
+                                    localVideoRef.current.play().then(() => {
+                                        console.log("Local video played after interaction.");
+                                    }).catch(err => {
+                                        console.error("Still failed to play local video after interaction:", err);
+                                    });
+                                }
+                                document.body.removeEventListener('click', playOnInteraction);
+                            };
+                            document.body.addEventListener('click', playOnInteraction, { once: true });
+                        }
+                    });
+                }
+
+                // Cleanup: stop tracks when localStream changes or component unmounts
+                return () => {
+                    if (localStream && localVideoRef.current && localVideoRef.current.srcObject === localStream) {
+                        // We don't stop tracks here as they're managed by the startVideoChat/stopVideoChat functions
+                    }
+                };
+            }, [localStream]);
+
+            // Effect for handling remote streams
+            React.useEffect(() => {
+                // Handle remote stream updates
+                if (Object.keys(remoteStreams).length > 0 && remoteVideoRef.current) {
+                    // For simplicity, we'll just use the first remote stream
+                    const firstRemoteStreamId = Object.keys(remoteStreams)[0];
+                    const firstRemoteStream = remoteStreams[firstRemoteStreamId];
+
+                    if (firstRemoteStream && remoteVideoRef.current.srcObject !== firstRemoteStream) {
+                        console.log('Attaching remote stream to remoteVideoRef:', firstRemoteStream);
+                        remoteVideoRef.current.srcObject = firstRemoteStream;
+
+                        remoteVideoRef.current.play().catch(e => {
+                            console.error("Error playing remote video:", e);
+                            if (e.name === "NotAllowedError") {
+                                showNotification("Click anywhere to enable remote video/audio.", "info");
+                                // Add a one-time click listener to the body to attempt play again
+                                const playOnInteraction = () => {
+                                    if (remoteVideoRef.current) {
+                                        remoteVideoRef.current.play().then(() => {
+                                            console.log("Remote video played after interaction.");
+                                        }).catch(err => {
+                                            console.error("Still failed to play remote video after interaction:", err);
+                                        });
+                                    }
+                                    document.body.removeEventListener('click', playOnInteraction);
+                                };
+                                document.body.addEventListener('click', playOnInteraction, { once: true });
+                            }
+                        });
+
+                        // Update connection state
+                        setIsRemoteConnected(true);
+                        setConnectionState('connected');
+                    }
+                } else if (remoteVideoRef.current) {
+                    // No remote streams, clear the video element
+                    remoteVideoRef.current.srcObject = null;
+                    setIsRemoteConnected(false);
+                }
+            }, [remoteStreams]);
 
             // Load data from localStorage
             const loadData = async () => {
@@ -3342,6 +3435,17 @@
 
                     // Add to localStorage
                     await messagesCollection.add(message);
+
+                    // Immediately update the messages state to show the new message
+                    setMessages(prevMessages => [...prevMessages, message]);
+
+                    // Scroll to bottom of message board
+                    setTimeout(() => {
+                        const messageBoard = document.querySelector('.message-board');
+                        if (messageBoard) {
+                            messageBoard.scrollTop = messageBoard.scrollHeight;
+                        }
+                    }, 100);
 
                     // Reset private message form
                     setFormData(prev => ({ ...prev, privateMessage: '' }));
@@ -4294,6 +4398,8 @@
                     console.log('Requesting media with constraints:', constraints);
 
                     try {
+                        // Add more detailed error handling for camera access
+                        console.log('Requesting media with detailed error handling...');
                         const stream = await navigator.mediaDevices.getUserMedia(constraints);
                         console.log('Got media stream:', stream);
                         console.log('Video tracks:', stream.getVideoTracks().length);
@@ -4307,32 +4413,67 @@
                         setIsRemoteConnected(false);
                         setConnectionState('connecting');
 
-                        // Set the stream to the video element
-                        const videoElement = document.getElementById('local-video');
-                        if (videoElement) {
-                            console.log('Setting stream to local video element');
-                            videoElement.srcObject = stream;
-                            videoElement.muted = true; // Mute local video to prevent feedback
+                        // Set the stream to the video element using the ref
+                        if (localVideoRef.current) {
+                            console.log('Setting stream to local video element using ref');
+                            localVideoRef.current.srcObject = stream;
+                            localVideoRef.current.muted = true; // Mute local video to prevent feedback
 
-                            // Force play the video
-                            videoElement.play()
+                            // Force play the video with enhanced error handling
+                            localVideoRef.current.play()
                                 .then(() => console.log('Local video playing'))
                                 .catch(e => {
                                     console.error('Error playing local video:', e);
+
+                                    // Provide specific error messages based on error type
+                                    if (e.name === "NotAllowedError") {
+                                        showNotification('Browser requires user interaction to play video. Click anywhere to enable your camera.', 'info');
+                                    } else if (e.name === "AbortError") {
+                                        showNotification('Video playback was aborted. Try refreshing the page.', 'error');
+                                    } else if (e.name === "NotFoundError") {
+                                        showNotification('No camera found on your device.', 'error');
+                                    } else {
+                                        showNotification(`Video error: ${e.message}. Click anywhere to try again.`, 'error');
+                                    }
+
                                     // Try again with user interaction
-                                    showNotification('Click anywhere to enable your camera', 'info');
-                                    document.body.addEventListener('click', () => {
-                                        videoElement.play()
-                                            .then(() => console.log('Local video playing after user interaction'))
-                                            .catch(e => console.error('Still cannot play local video:', e));
-                                    }, { once: true });
+                                    const playOnInteraction = () => {
+                                        if (localVideoRef.current) {
+                                            localVideoRef.current.play()
+                                                .then(() => {
+                                                    console.log('Local video playing after user interaction');
+                                                    showNotification('Camera enabled successfully!', 'success');
+                                                })
+                                                .catch(err => {
+                                                    console.error('Still cannot play local video:', err);
+                                                    showNotification('Camera access still failed. Try refreshing the page or check browser settings.', 'error');
+                                                });
+                                        }
+                                        document.body.removeEventListener('click', playOnInteraction);
+                                    };
+                                    document.body.addEventListener('click', playOnInteraction, { once: true });
                                 });
                         } else {
-                            console.error('Local video element not found');
+                            console.error('Local video ref not found');
+                            showNotification('Video element not found. This is a technical issue.', 'error');
                         }
                     } catch (mediaError) {
                         console.error('Error accessing media devices:', mediaError);
-                        showNotification(`Camera/microphone access error: ${mediaError.message}. Please check your device permissions.`, 'error');
+
+                        // Provide more specific error messages based on the error type
+                        if (mediaError.name === "NotAllowedError") {
+                            showNotification('Camera/microphone access denied. Please allow access in your browser settings and try again.', 'error');
+                        } else if (mediaError.name === "NotFoundError") {
+                            showNotification('No camera or microphone found on your device.', 'error');
+                        } else if (mediaError.name === "NotReadableError" || mediaError.name === "AbortError") {
+                            showNotification('Your camera or microphone is already in use by another application.', 'error');
+                        } else if (mediaError.name === "OverconstrainedError") {
+                            showNotification('Your camera does not support the requested resolution.', 'error');
+                        } else if (mediaError.name === "SecurityError") {
+                            showNotification('Media access is not allowed in this context. Try using HTTPS.', 'error');
+                        } else {
+                            showNotification(`Camera/microphone access error: ${mediaError.message}. Please check your device permissions.`, 'error');
+                        }
 
                         // Try with just audio as fallback
                         if (constraints.video && type !== 'audio') {
@@ -4344,10 +4485,23 @@
                                 });
                                 setLocalStream(audioOnlyStream);
                                 setIsCameraOff(true);
+
+                                // Update UI to reflect audio-only mode
                                 showNotification('Connected with audio only. Video is unavailable.', 'warning');
                             } catch (audioError) {
                                 console.error('Error accessing audio:', audioError);
-                                showNotification('Could not access microphone. Please check permissions.', 'error');
+
+                                // Provide specific audio error messages
+                                if (audioError.name === "NotAllowedError") {
+                                    showNotification('Microphone access denied. Please allow access in your browser settings.', 'error');
+                                } else if (audioError.name === "NotFoundError") {
+                                    showNotification('No microphone found on your device.', 'error');
+                                } else {
+                                    showNotification('Could not access microphone. Please check permissions.', 'error');
+                                }
+
+                                // Fall back to simulated mode as last resort
+                                showNotification('Falling back to simulated mode...', 'info');
                             }
                         }
                     }
@@ -4496,11 +4650,28 @@
                                 // Create a simulated video stream
                                 const fakeStream = createSimulatedStream();
 
-                                // Set the stream to the remote video element
-                                const remoteVideo = document.getElementById('remote-video');
-                                if (remoteVideo) {
-                                    remoteVideo.srcObject = fakeStream;
-                                    remoteVideo.play().catch(e => console.error('Error playing remote video:', e));
+                                // Set the stream to the remote video element using the ref
+                                if (remoteVideoRef.current) {
+                                    remoteVideoRef.current.srcObject = fakeStream;
+                                    remoteVideoRef.current.play()
+                                        .then(() => console.log('Remote video playing'))
+                                        .catch(e => {
+                                            console.error('Error playing remote video:', e);
+                                            // Provide specific error messages based on error type
+                                            if (e.name === "NotAllowedError") {
+                                                showNotification('Browser requires interaction to play remote video. Click anywhere to enable.', 'info');
+                                                // Try again with user interaction
+                                                document.body.addEventListener('click', () => {
+                                                    if (remoteVideoRef.current) {
+                                                        remoteVideoRef.current.play()
+                                                            .then(() => console.log('Remote video playing after user interaction'))
+                                                            .catch(err => console.error('Still cannot play remote video:', err));
+                                                    }
+                                                }, { once: true });
+                                            }
+                                        });
+                                } else {
+                                    console.error('Remote video ref not found');
                                 }
 
                                 // Update UI to show connected state
@@ -4775,12 +4946,11 @@
                             console.log('Got local media stream for new user join:', stream.getTracks());
                             setLocalStream(stream);
 
-                            // Set the stream to the local video element
-                            const videoElement = document.getElementById('local-video');
-                            if (videoElement) {
-                                videoElement.srcObject = stream;
-                                videoElement.muted = true; // Mute local video to prevent feedback
-                                videoElement.play().catch(e => console.error('Error playing local video:', e));
+                            // Set the stream to the local video element using the ref
+                            if (localVideoRef.current) {
+                                localVideoRef.current.srcObject = stream;
+                                localVideoRef.current.muted = true; // Mute local video to prevent feedback
+                                localVideoRef.current.play().catch(e => console.error('Error playing local video:', e));
                             }
 
                             // Add the stream to the WebSocket client and initiate call
@@ -4802,11 +4972,10 @@
                         [userId]: stream
                     }));
 
-                    // Set the stream to the remote video element
-                    const remoteVideo = document.getElementById('remote-video');
-                    if (remoteVideo) {
-                        remoteVideo.srcObject = stream;
-                        remoteVideo.play().catch(e => console.error('Error playing remote video:', e));
+                    // Set the stream to the remote video element using the ref
+                    if (remoteVideoRef.current) {
+                        remoteVideoRef.current.srcObject = stream;
+                        remoteVideoRef.current.play().catch(e => console.error('Error playing remote video:', e));
                     }
 
                     setIsRemoteConnected(true);
@@ -5310,6 +5479,7 @@
                                                     <div className="relative">
                                                         <video
                                                             id="remote-video"
+                                                            ref={remoteVideoRef}
                                                             autoPlay
                                                             playsInline
                                                             className={`w-full h-full object-cover rounded-lg bg-gray-200 border-2 ${remoteSpeaking ? 'border-green-500' : 'border-purple-300'}`}
@@ -5369,6 +5539,7 @@
                                                     <div className="absolute bottom-2 right-2 w-1/4 h-1/4 min-w-[80px] min-h-[60px] relative">
                                                         <video
                                                             id="local-video"
+                                                            ref={localVideoRef}
                                                             autoPlay
                                                             muted
                                                             playsInline
