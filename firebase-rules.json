@@ -1,0 +1,56 @@
+{
+  "rules": {
+    "firestore": {
+      "rules": {
+        "attendees": {
+          ".read": true,
+          ".write": "auth != null"
+        },
+        "messages": {
+          ".read": true,
+          ".write": "auth != null"
+        },
+        "activities": {
+          ".read": true,
+          ".write": "auth != null"
+        },
+        "foods": {
+          ".read": true,
+          ".write": "auth != null"
+        },
+        "users": {
+          ".read": true,
+          ".write": "auth != null",
+          "$uid": {
+            ".read": "auth != null && auth.uid == $uid",
+            ".write": "auth != null && auth.uid == $uid"
+          }
+        }
+      }
+    },
+    "database": {
+      "rules": {
+        "calls": {
+          ".read": "auth != null",
+          ".write": "auth != null",
+          "$callId": {
+            ".read": "auth != null",
+            ".write": "auth != null",
+            "candidates": {
+              "$uid": {
+                ".read": "auth != null",
+                ".write": "auth != null && auth.uid == $uid"
+              }
+            }
+          }
+        },
+        "presence": {
+          ".read": "auth != null",
+          "$uid": {
+            ".write": "auth != null && auth.uid == $uid"
+          }
+        }
+      }
+    }
+  }
+}
